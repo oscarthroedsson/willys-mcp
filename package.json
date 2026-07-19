@@ -6,7 +6,12 @@
   "engines": {
     "node": ">=20"
   },
+  "bin": {
+    "willys-mcp": "./dist/index.js"
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
     "mcp": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "smoke": "tsx tests/smoke.ts",

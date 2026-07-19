@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": false,
+    "sourceMap": true,
+    // The dev config uses "bundler" resolution, which tsx handles but Node does
+    // not. Emitting for plain `node` needs NodeNext — which works here only
+    // because every relative import already carries an explicit .js extension.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "tests", "scripts", "docs"]
+}
