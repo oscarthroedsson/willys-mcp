@@ -35,6 +35,7 @@ import {
   type PlanAction,
 } from "./planner/reconcile.js";
 import type { Measure } from "./domain/volume.js";
+import { inspectSetup, setupBlocker } from "./setup.js";
 import * as api from "./upstream/index.js";
 import { findCheapest } from "./upstream/cheapest.js";
 import * as stores from "./upstream/stores.js";
@@ -124,8 +125,39 @@ async function dispatch(
   args: never,
 ): Promise<ToolResponse> {
   switch (name) {
+    case TOOL.setup: {
+      const r = inspectSetup();
+      return text(
+        compact({
+          klar: r.ready,
+          ...(r.ready
+            ? { status: "Servern är konfigurerad och redo. Kör willys_login." }
+            : {
+                status: "Servern är INTE konfigurerad än.",
+                fil_att_fylla_i: r.envFile,
+                mall_att_utga_ifran: r.envExample,
+                steg: r.steps,
+                notering:
+                  "Visa stegen ordagrant för användaren. Du kan inte utföra dem " +
+                  "åt dem — de kräver att någon redigerar en fil på datorn.",
+              }),
+          kontroller: r.checks.map((c) => ({
+            kontroll: c.label,
+            status: c.status,
+            detalj: c.detail,
+            ...(c.fix ? { atgard: c.fix } : {}),
+          })),
+        }),
+      );
+    }
+
     case TOOL.login: {
       const a = args as z.infer<typeof Inputs.login>;
+
+      // Nothing the model can send fixes a missing password. Say so once,
+      // pointing at the file, instead of failing inside Puppeteer.
+      const blocker = setupBlocker();
+      if (blocker) return failure(`${blocker} (SETUP_REQUIRED)`);
 
       // Re-use a live session rather than authenticating again. Willys
       // throttles repeated logins, and sessions are valid for 24 hours, so a

@@ -1,0 +1,286 @@
+import { accessSync, constants, existsSync, statSync } from "node:fs";
+import path from "node:path";
+import { DB_PATH, PROJECT_ROOT } from "./config.js";
+import { USERNAME_PATTERN } from "./constants/index.js";
+import { loadEnv } from "./core/env.js";
+
+/**
+ * First-run diagnostics.
+ *
+ * An MCP server is installed by a human but driven by a model, and the model
+ * cannot fix a missing password — it can only relay instructions. So a missing
+ * .env must not surface as "login failed": it has to arrive as a checklist with
+ * real paths on this machine, that the model can hand straight to the user.
+ *
+ * Nothing here reads a secret's value. Presence and shape only.
+ */
+
+export type CheckStatus = "ok" | "missing" | "invalid" | "warning";
+
+export interface SetupCheck {
+  id: string;
+  label: string;
+  status: CheckStatus;
+  detail: string;
+  /** What the user must do. Absent when the check passed. */
+  fix?: string;
+}
+
+export interface SetupReport {
+  /** True when every blocking check passes — the server can actually be used. */
+  ready: boolean;
+  envFile: string;
+  envExample: string;
+  projectRoot: string;
+  checks: SetupCheck[];
+  /** Ordered, copy-pasteable steps. Empty when ready. */
+  steps: string[];
+}
+
+const ENV_FILE = (): string =>
+  process.env.WILLYS_ENV_FILE ?? path.join(PROJECT_ROOT, ".env");
+
+function checkEnvFile(): SetupCheck {
+  const file = ENV_FILE();
+  if (!existsSync(file)) {
+    return {
+      id: "env_file",
+      label: ".env finns",
+      status: "missing",
+      detail: `ingen .env på ${file}`,
+      fix: `Kopiera ${path.join(PROJECT_ROOT, ".env.example")} till ${file} och fyll i den.`,
+    };
+  }
+
+  // Credentials in a world-readable file is worth flagging, not blocking.
+  const mode = statSync(file).mode & 0o777;
+  if (mode & 0o077) {
+    return {
+      id: "env_file",
+      label: ".env finns",
+      status: "warning",
+      detail: `${file} har rättigheter ${mode.toString(8)} — läsbar för andra användare`,
+      fix: `chmod 600 ${file}`,
+    };
+  }
+
+  return {
+    id: "env_file",
+    label: ".env finns",
+    status: "ok",
+    detail: file,
+  };
+}
+
+function checkUsername(): SetupCheck {
+  const raw = process.env.WILLYS_USERNAME?.trim();
+  if (!raw) {
+    return {
+      id: "username",
+      label: "WILLYS_USERNAME",
+      status: "missing",
+      detail: "inte satt",
+      fix:
+        "Sätt WILLYS_USERNAME till ditt personnummer (10 eller 12 siffror) " +
+        "eller ditt Willys Plus-nummer (16 siffror).",
+    };
+  }
+  if (!USERNAME_PATTERN.test(raw)) {
+    return {
+      id: "username",
+      label: "WILLYS_USERNAME",
+      status: "invalid",
+      detail: `${raw.length} tecken — matchar varken personnummer eller Plus-nummer`,
+      fix:
+        "Personnummer med 10 eller 12 siffror, eller Willys Plus-nummer med 16. " +
+        "E-postadress fungerar inte: formuläret skickas aldrig och du får ett " +
+        "missvisande 401 längre fram.",
+    };
+  }
+  return {
+    id: "username",
+    label: "WILLYS_USERNAME",
+    status: "ok",
+    detail: `${raw.length} siffror`,
+  };
+}
+
+function checkPassword(): SetupCheck {
+  const raw = process.env.WILLYS_PASSWORD;
+  if (!raw || raw.trim().length === 0) {
+    return {
+      id: "password",
+      label: "WILLYS_PASSWORD",
+      status: "missing",
+      detail: "inte satt",
+      fix:
+        "Sätt WILLYS_PASSWORD till lösenordet för willys.se. " +
+        "BankID-inloggning stöds inte — kontot måste ha ett lösenord.",
+    };
+  }
+  return {
+    id: "password",
+    label: "WILLYS_PASSWORD",
+    status: "ok",
+    detail: "satt",
+  };
+}
+
+function checkStoreId(): SetupCheck {
+  const raw = process.env.WILLYS_STORE_ID?.trim();
+  if (!raw) {
+    return {
+      id: "store_id",
+      label: "WILLYS_STORE_ID",
+      status: "warning",
+      detail: "inte satt — bara willys_get_campaigns påverkas",
+      fix:
+        "Valfritt. Slå upp din butik med willys_find_stores (ortsnamn eller " +
+        "postnummer) och sätt id:t i .env.",
+    };
+  }
+  if (!/^\d{3,6}$/.test(raw)) {
+    return {
+      id: "store_id",
+      label: "WILLYS_STORE_ID",
+      status: "invalid",
+      detail: `"${raw}" är inte ett butiks-id`,
+      fix: "Butiks-id är 3–6 siffror. Slå upp med willys_find_stores.",
+    };
+  }
+  return { id: "store_id", label: "WILLYS_STORE_ID", status: "ok", detail: raw };
+}
+
+function checkDatabase(): SetupCheck {
+  const dir = path.dirname(DB_PATH);
+  try {
+    accessSync(dir, constants.W_OK);
+  } catch {
+    return {
+      id: "database",
+      label: "Databas skrivbar",
+      status: "invalid",
+      detail: `kan inte skriva i ${dir}`,
+      fix:
+        `Ge skrivrättigheter till ${dir}, eller peka WILLYS_DB_PATH på en ` +
+        "katalog du äger.",
+    };
+  }
+  return {
+    id: "database",
+    label: "Databas skrivbar",
+    status: "ok",
+    detail: DB_PATH,
+  };
+}
+
+/**
+ * Puppeteer downloads a ~200 MB Chromium on install. If that step was skipped
+ * or the cache was cleared, login fails deep inside the browser launch with a
+ * message that says nothing about installation.
+ */
+function checkBrowser(): SetupCheck {
+  const cacheRoot =
+    process.env.PUPPETEER_CACHE_DIR ??
+    path.join(process.env.HOME ?? "", ".cache", "puppeteer");
+
+  if (!existsSync(cacheRoot)) {
+    return {
+      id: "browser",
+      label: "Chromium nedladdad",
+      status: "missing",
+      detail: `ingen webbläsarcache på ${cacheRoot}`,
+      fix:
+        "Kör `npx puppeteer browsers install chrome` i projektkatalogen. " +
+        "Inloggningen kräver en riktig webbläsare — Willys formulär går inte " +
+        "att posta över vanlig HTTP.",
+    };
+  }
+  return {
+    id: "browser",
+    label: "Chromium nedladdad",
+    status: "ok",
+    detail: cacheRoot,
+  };
+}
+
+/** A check that blocks use, as opposed to one that merely degrades it. */
+function blocking(c: SetupCheck): boolean {
+  return c.status === "missing" || c.status === "invalid";
+}
+
+export function inspectSetup(): SetupReport {
+  loadEnv();
+
+  const checks = [
+    checkEnvFile(),
+    checkUsername(),
+    checkPassword(),
+    checkStoreId(),
+    checkDatabase(),
+    checkBrowser(),
+  ];
+
+  // store_id degrades one tool; it must never block the other eighteen.
+  const blockers = checks.filter((c) => blocking(c) && c.id !== "store_id");
+
+  const steps: string[] = [];
+  if (blockers.length > 0) {
+    const envFile = ENV_FILE();
+    if (blockers.some((b) => b.id === "env_file")) {
+      steps.push(
+        `1. Kopiera ${path.join(PROJECT_ROOT, ".env.example")} till ${envFile}`,
+      );
+    }
+    if (blockers.some((b) => b.id === "username" || b.id === "password")) {
+      steps.push(
+        `${steps.length + 1}. Öppna ${envFile} och fyll i WILLYS_USERNAME ` +
+          "(personnummer, 10 eller 12 siffror) och WILLYS_PASSWORD",
+      );
+      steps.push(`${steps.length + 1}. Kör: chmod 600 ${envFile}`);
+    }
+    if (blockers.some((b) => b.id === "browser")) {
+      steps.push(
+        `${steps.length + 1}. Kör: npx puppeteer browsers install chrome`,
+      );
+    }
+    if (blockers.some((b) => b.id === "database")) {
+      steps.push(
+        `${steps.length + 1}. Se till att ${path.dirname(DB_PATH)} är skrivbar`,
+      );
+    }
+    steps.push(
+      `${steps.length + 1}. Starta om MCP-servern i din klient och kör willys_setup igen`,
+    );
+  }
+
+  return {
+    ready: blockers.length === 0,
+    envFile: ENV_FILE(),
+    envExample: path.join(PROJECT_ROOT, ".env.example"),
+    projectRoot: PROJECT_ROOT,
+    checks,
+    steps,
+  };
+}
+
+/**
+ * Guard for tools that cannot work unconfigured.
+ *
+ * Returns null when the server is usable, or a ready-made message naming the
+ * exact file to edit when it is not.
+ */
+export function setupBlocker(): string | null {
+  const report = inspectSetup();
+  if (report.ready) return null;
+
+  const missing = report.checks
+    .filter((c) => blocking(c) && c.id !== "store_id")
+    .map((c) => c.label)
+    .join(", ");
+
+  return (
+    `Servern är inte konfigurerad på den här datorn. Saknas: ${missing}. ` +
+    `Kör willys_setup för fullständiga steg — filen som ska fyllas i är ${report.envFile}.`
+  );
+}

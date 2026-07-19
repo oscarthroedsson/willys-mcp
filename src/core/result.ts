@@ -19,7 +19,15 @@ export type ErrorKind =
   /** Transport failure or timeout. */
   | "NETWORK"
   /** Caller supplied invalid arguments. */
-  | "INPUT";
+  | "INPUT"
+  /**
+   * The server is not configured on this machine yet.
+   *
+   * Distinct from INPUT because nothing the model can send will fix it — a
+   * human has to edit a file on disk. Conflating the two makes the model retry
+   * with different arguments forever.
+   */
+  | "SETUP_REQUIRED";
 
 export type Result<T> =
   | { ok: true; data: T }
@@ -51,5 +59,7 @@ export function explain(kind: ErrorKind): string {
       return "Nätverksfel mot Willys.";
     case "INPUT":
       return "Ogiltiga argument.";
+    case "SETUP_REQUIRED":
+      return "Servern är inte konfigurerad än. Kör willys_setup och visa stegen för användaren.";
   }
 }

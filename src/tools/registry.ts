@@ -52,6 +52,8 @@ function surplusKeys(description: string) {
 }
 
 export const Inputs = {
+  setup: z.object({}).strict(),
+
   login: z
     .object({
       force: z
@@ -395,6 +397,15 @@ function jsonSchema(shape: z.ZodTypeAny): Record<string, unknown> {
 }
 
 export const TOOLS = [
+  {
+    name: TOOL.setup,
+    description:
+      "Kontrollera om servern är konfigurerad på den här datorn och få exakta " +
+      "steg om något saknas — vilken fil som ska fyllas i, med full sökväg. " +
+      "Kräver ingen session. Kör detta FÖRST om willys_login misslyckas, och " +
+      "visa stegen ordagrant för användaren: modellen kan inte fixa dem själv.",
+    schema: Inputs.setup,
+  },
   {
     name: TOOL.login,
     description:

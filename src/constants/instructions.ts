@@ -14,6 +14,19 @@ export const SERVER_INSTRUCTIONS = `
 
 Willys-MCP: svensk dagligvaruhandel. Sök, jämför pris, hantera kundvagn och läs orderhistorik.
 
+## Första gången: kontrollera uppsättningen
+
+Servern körs på användarens egen dator och kräver deras Willys-konto i en
+.env-fil. Går willys_login fel, eller svarar något verktyg SETUP_REQUIRED:
+kör willys_setup och visa stegen ORDAGRANT, inklusive den fullständiga
+sökvägen till filen som ska fyllas i.
+
+Du kan inte lösa det åt användaren. Stegen kräver att en människa redigerar en
+fil på disken. Gissa aldrig på uppgifter, och be dem aldrig klistra in
+lösenordet i chatten — det ska bara skrivas in i .env-filen.
+
+BankID stöds inte. Kontot måste ha ett vanligt lösenord.
+
 ## Sessionsflöde
 
 Anropa willys_login först. Den returnerar ett sessionId (UUID) som krävs av alla
