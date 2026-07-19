@@ -1,0 +1,26 @@
+{
+  "name": "willys-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "mcp": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "probe": "tsx scripts/probe.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.4",
+    "better-sqlite3": "^12.6.2",
+    "puppeteer": "^24.35.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.0.9",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3"
+  }
+}
