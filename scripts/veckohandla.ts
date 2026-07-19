@@ -1,7 +1,7 @@
 import { harvestCookies, readCredentials } from "../src/auth/login.js";
 import { createSession, findValidSession, getCookies } from "../src/auth/session.js";
 import { verifySession } from "../src/auth/login.js";
-import { addToCart, getCart } from "../src/upstream/client.js";
+import { addToCart, getCart } from "../src/upstream/cart.js";
 import { findCheapest } from "../src/upstream/cheapest.js";
 
 /**

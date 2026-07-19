@@ -9,7 +9,11 @@
   "scripts": {
     "mcp": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "probe": "tsx scripts/probe.ts"
+    "smoke": "tsx tests/smoke.ts",
+    "test:volume": "tsx tests/volume.test.ts",
+    "test:category": "tsx tests/category.test.ts",
+    "kandidater": "tsx scripts/kandidater.ts",
+    "veckohandla": "tsx scripts/veckohandla.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.4",

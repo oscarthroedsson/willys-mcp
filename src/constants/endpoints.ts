@@ -8,6 +8,10 @@ export const ENDPOINTS = {
   loginPage: `${BASE}/anvandare/inloggning`,
   csrf: `${BASE}/axfood/rest/csrf-token`,
   orders: `${BASE}/axfood/rest/account/orders`,
+
+  /** Line items for one order: `?q={orderId}`, grouped by category. */
+  orderData: `${BASE}/axfood/rest/orderdata`,
+
   cart: `${BASE}/axfood/rest/cart`,
   addProducts: `${BASE}/axfood/rest/cart/addProducts`,
   customer: `${BASE}/axfood/rest/customer`,

@@ -22,16 +22,27 @@ import {
 import { log } from "./core/logger.js";
 import { explain, type Result } from "./core/result.js";
 import { compact, prune, pruneProduct } from "./mappers/prune.js";
-import * as api from "./upstream/client.js";
+import * as api from "./upstream/index.js";
 import { findCheapest } from "./upstream/cheapest.js";
 import * as stores from "./upstream/stores.js";
 import { DEFAULT_STORE_ID } from "./config.js";
-import { SERVER_INFO, TOOL, type ToolName } from "./constants/index.js";
+import {
+  SERVER_INFO,
+  SERVER_INSTRUCTIONS,
+  TOOL,
+  type ToolName,
+} from "./constants/index.js";
 import { Inputs, TOOLS, toolManifest } from "./tools/registry.js";
 
+// `instructions` rides along in the SDK's own initialize response. The Protocol
+// class owns that method, so this is the supported way to reach the payload —
+// registering an InitializeRequestSchema handler here would collide with it.
 const server = new Server(
   { name: SERVER_INFO.name, version: SERVER_INFO.version },
-  { capabilities: { tools: {} } },
+  {
+    capabilities: { tools: {} },
+    instructions: SERVER_INSTRUCTIONS,
+  },
 );
 
 type ToolResponse = {
