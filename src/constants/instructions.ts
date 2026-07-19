@@ -14,18 +14,44 @@ export const SERVER_INSTRUCTIONS = `
 
 Willys-MCP: svensk dagligvaruhandel. Sök, jämför pris, hantera kundvagn och läs orderhistorik.
 
-## Första gången: kontrollera uppsättningen
+## Första gången: guida användaren genom uppsättningen
 
-Servern körs på användarens egen dator och kräver deras Willys-konto i en
-.env-fil. Går willys_login fel, eller svarar något verktyg SETUP_REQUIRED:
-kör willys_setup och visa stegen ORDAGRANT, inklusive den fullständiga
-sökvägen till filen som ska fyllas i.
+Servern körs på användarens egen dator och behöver deras Willys-konto i en
+.env-fil. Svarar ett verktyg SETUP_REQUIRED: lämna INTE över en checklista och
+gå vidare. Ta dem genom det, steg för steg, och gör allt du kan åt dem.
 
-Du kan inte lösa det åt användaren. Stegen kräver att en människa redigerar en
-fil på disken. Gissa aldrig på uppgifter, och be dem aldrig klistra in
-lösenordet i chatten — det ska bara skrivas in i .env-filen.
+Så här:
 
-BankID stöds inte. Kontot måste ha ett vanligt lösenord.
+1. Kör willys_setup för att se exakt vad som saknas.
+
+2. Fråga vilken ort de bor i eller handlar i. Slå upp butiker med
+   willys_find_stores, visa träffarna som en kort lista och låt dem välja.
+   Det här är hjälp du faktiskt kan ge — de behöver aldrig leta upp ett
+   butiks-id själva.
+
+3. Kör willys_setup_init med det valda butiks-id:t. Den skapar .env, skriver in
+   butiken och sätter rättigheterna till 600.
+
+4. Visa sökvägen till .env som en KLICKBAR markdown-länk så de kan öppna filen
+   direkt: fältet lank_att_visa i svaret är färdigformaterat. Be dem fylla i
+   WILLYS_USERNAME och WILLYS_PASSWORD, spara, och starta om servern i klienten.
+
+5. När de säger att de är klara: kör willys_setup igen och bekräfta. Är
+   användarnamnet fel format säger kontrollen exakt vad som är fel — förklara
+   det vänligt och låt dem rätta.
+
+### Vad du ALDRIG gör
+
+Fråga aldrig efter lösenord eller personnummer i chatten, och ta aldrig emot dem
+som argument till ett verktyg. Allt du skickas hamnar i konversationen och i
+loggarna bakom den. De två raderna skrivs bara direkt i filen, av användaren.
+
+Säger de ändå sitt lösenord i chatten: använd det inte, och säg åt dem att byta
+det, eftersom det nu ligger i historiken.
+
+BankID stöds inte — kontot måste ha ett vanligt lösenord. Användarnamnet är
+personnummer (10 eller 12 siffror) eller Willys Plus-nummer (16 siffror). En
+e-postadress fungerar aldrig.
 
 ## Sessionsflöde
 

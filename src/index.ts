@@ -35,7 +35,8 @@ import {
   type PlanAction,
 } from "./planner/reconcile.js";
 import type { Measure } from "./domain/volume.js";
-import { inspectSetup, setupBlocker } from "./setup.js";
+import path from "node:path";
+import { initEnvFile, inspectSetup, setupBlocker } from "./setup.js";
 import * as api from "./upstream/index.js";
 import { findCheapest } from "./upstream/cheapest.js";
 import * as stores from "./upstream/stores.js";
@@ -147,6 +148,31 @@ async function dispatch(
             detalj: c.detail,
             ...(c.fix ? { atgard: c.fix } : {}),
           })),
+        }),
+      );
+    }
+
+    case TOOL.setupInit: {
+      const a = args as z.infer<typeof Inputs.setup_init>;
+      const r = initEnvFile(a.storeId);
+      return text(
+        compact({
+          fil: r.envFile,
+          lank_att_visa: `[${path.basename(r.envFile)}](${r.envFile})`,
+          skapad: r.created,
+          ...(r.storeIdWritten ? { butik_ifylld: r.storeIdWritten } : {}),
+          ...(r.permissionsFixed ? { rattigheter: "satta till 600" } : {}),
+          kvar_att_fylla_i: r.remaining,
+          ...(r.remaining.length > 0
+            ? {
+                sa_har_ber_du_dem:
+                  `Öppna ${r.envFile} och fyll i ${r.remaining.join(" och ")}. ` +
+                  "WILLYS_USERNAME är personnummer (10 eller 12 siffror) eller " +
+                  "Willys Plus-nummer (16 siffror). Spara, starta om servern i " +
+                  "klienten, och säg till så verifierar jag.",
+              }
+            : {}),
+          notering: r.note,
         }),
       );
     }

@@ -54,6 +54,24 @@ function surplusKeys(description: string) {
 export const Inputs = {
   setup: z.object({}).strict(),
 
+  setup_init: z
+    .object({
+      storeId: z
+        .string()
+        .regex(/^\d{3,6}$/)
+        .optional()
+        .describe(
+          "Butiks-id att skriva in åt användaren. Slå upp det med " +
+            "willys_find_stores först — fråga vilken ort de bor i, visa " +
+            "träffarna och låt dem välja. Utelämna om de inte vill välja butik än.",
+        ),
+    })
+    .strict()
+    .describe(
+      "Tar AVSIKTLIGT varken lösenord eller personnummer. Tool-argument hamnar " +
+        "i konversationen; hemligheter ska bara skrivas direkt i .env-filen.",
+    ),
+
   login: z
     .object({
       force: z
@@ -405,6 +423,15 @@ export const TOOLS = [
       "Kräver ingen session. Kör detta FÖRST om willys_login misslyckas, och " +
       "visa stegen ordagrant för användaren: modellen kan inte fixa dem själv.",
     schema: Inputs.setup,
+  },
+  {
+    name: TOOL.setupInit,
+    description:
+      "Skapa .env åt användaren och skriv in butiks-id, med rättigheter 600. " +
+      "Returnerar sökvägen till filen som de ska öppna för att fylla i " +
+      "inloggningsuppgifterna. Ta ALDRIG emot lösenord eller personnummer — " +
+      "varken här eller i chatten; de skrivs bara i filen.",
+    schema: Inputs.setup_init,
   },
   {
     name: TOOL.login,

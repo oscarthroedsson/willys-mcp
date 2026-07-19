@@ -8,6 +8,7 @@
  */
 export const TOOL = {
   setup: "willys_setup",
+  setupInit: "willys_setup_init",
   login: "willys_login",
   checkAuth: "willys_check_auth",
   logout: "willys_logout",

@@ -1,4 +1,12 @@
-import { accessSync, constants, existsSync, statSync } from "node:fs";
+import {
+  accessSync,
+  chmodSync,
+  constants,
+  existsSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { DB_PATH, PROJECT_ROOT } from "./config.js";
 import { USERNAME_PATTERN } from "./constants/index.js";
@@ -261,6 +269,82 @@ export function inspectSetup(): SetupReport {
     projectRoot: PROJECT_ROOT,
     checks,
     steps,
+  };
+}
+
+export interface InitResult {
+  envFile: string;
+  created: boolean;
+  storeIdWritten: string | null;
+  permissionsFixed: boolean;
+  /** Variables the user must still fill in by hand. */
+  remaining: string[];
+  note: string;
+}
+
+/**
+ * Prepare .env as far as it can be prepared without handling a secret.
+ *
+ * Creates the file from the template, writes the store id the model looked up,
+ * and locks the permissions down. What it deliberately does NOT do is accept a
+ * password or a personnummer as an argument: tool arguments travel through the
+ * conversation, so anything passed here would be written to the transcript and
+ * whatever logs sit behind it. Those two lines stay a local edit, and the model
+ * hands over a path instead of asking for a value.
+ */
+export function initEnvFile(storeId?: string): InitResult {
+  const file = ENV_FILE();
+  const template = path.join(PROJECT_ROOT, ".env.example");
+
+  let created = false;
+  if (!existsSync(file)) {
+    const seed = existsSync(template)
+      ? readFileSync(template, "utf8")
+      : "WILLYS_USERNAME=\nWILLYS_PASSWORD=\nWILLYS_STORE_ID=\n";
+    writeFileSync(file, seed, { mode: 0o600 });
+    created = true;
+  }
+
+  let storeIdWritten: string | null = null;
+  if (storeId && /^\d{3,6}$/.test(storeId)) {
+    const current = readFileSync(file, "utf8");
+    const updated = current.includes("WILLYS_STORE_ID=")
+      ? current.replace(/^WILLYS_STORE_ID=.*$/m, `WILLYS_STORE_ID=${storeId}`)
+      : `${current.trimEnd()}\nWILLYS_STORE_ID=${storeId}\n`;
+    writeFileSync(file, updated, { mode: 0o600 });
+    storeIdWritten = storeId;
+  }
+
+  let permissionsFixed = false;
+  const mode = statSync(file).mode & 0o777;
+  if (mode & 0o077) {
+    chmodSync(file, 0o600);
+    permissionsFixed = true;
+  }
+
+  // Re-read from disk rather than trusting process.env: loadEnv() may have
+  // cached an earlier state, and what matters is what the file now says.
+  const contents = readFileSync(file, "utf8");
+  const isBlank = (key: string): boolean => {
+    const m = new RegExp(`^${key}=(.*)$`, "m").exec(contents);
+    return !m || m[1]!.trim().length === 0;
+  };
+
+  const remaining: string[] = [];
+  if (isBlank("WILLYS_USERNAME")) remaining.push("WILLYS_USERNAME");
+  if (isBlank("WILLYS_PASSWORD")) remaining.push("WILLYS_PASSWORD");
+
+  return {
+    envFile: file,
+    created,
+    storeIdWritten,
+    permissionsFixed,
+    remaining,
+    note:
+      remaining.length === 0
+        ? "Allt ifyllt. Starta om MCP-servern i klienten och kör willys_login."
+        : "Be användaren öppna filen och fylla i raderna som saknas. Fråga ALDRIG " +
+          "efter lösenord eller personnummer i chatten — de ska bara skrivas i filen.",
   };
 }
 
