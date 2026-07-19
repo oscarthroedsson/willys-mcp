@@ -5,9 +5,12 @@ Vägledning för Claude Code när du arbetar i det här repot.
 ## Kommandon
 
 ```bash
-npm run typecheck    # tsc --noEmit — enda verkliga porten före commit
-npm run mcp          # kör servern på stdio
-npm run smoke        # tests/smoke.ts, spawnar servern och kör riktiga anrop
+npm run typecheck      # tsc --noEmit — enda verkliga porten före commit
+npm run mcp            # kör servern på stdio
+npm run smoke          # tests/smoke.ts, spawnar servern och kör riktiga anrop
+npm run test:volume    # ren matte, inget nätverk
+npm run test:coverage  # täckningsoptimeraren, inget nätverk
+npm run test:planner   # behovsregistret, inget nätverk (egen plan-id)
 ```
 
 Det finns ingen unit-testsvit och inget byggsteg — `tsx` kör TypeScript direkt.
@@ -46,6 +49,16 @@ fält som styr pengar eller anropsvolym måste ha ett tak.
 (`_next/data/{buildId}/...`) roterar vid varje deploy. Använd REST-rutterna under
 `/axfood/rest/`. Döda endpoints raderas inte utan flyttas till `DEAD_ENDPOINTS`
 med datum, så att ingen återinför dem.
+
+**Planeraren räknar om, den patchar inte.** `buildPlan` härleder alltid hela
+korgen ur behovsregistret. Frestelsen att uppdatera en enskild rad inkrementellt
+förstör hela poängen — det är omräkningen som gör att 6-packet byts mot ett
+15-pack när behovet växer. `applyPlan` skickar sedan bara differensen.
+
+**Servern väljer inte åt användaren när avvägningen är verklig.** Överskott mot
+pris returneras som ett beslutsläge, aldrig som ett tyst val. Samma princip
+gäller måttslagskonflikter och ogiltiga kategorifacetter: säg vad som hände och
+vad alternativen är, gissa inte.
 
 **Svar beskärs mot kontextbudget.** `mappers/prune.ts` finns för att uppströms
 skickar 45 KB där modellen behöver 2 KB. Returnera inte råa uppströmsobjekt.

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  DEFAULT_PLAN_ID,
   LIMITS,
   PRODUCT_CODE_HINT,
   PRODUCT_CODE_PATTERN,
@@ -22,6 +23,33 @@ const sessionId = z
 
 /** Willys product codes look like 101175556_ST or 101253220_KG. */
 const productCode = z.string().regex(PRODUCT_CODE_PATTERN, PRODUCT_CODE_HINT);
+
+/**
+ * Named shopping plan. Several can exist side by side (veckan, fest, storkok)
+ * and they never share requirements.
+ */
+const planId = z
+  .string()
+  .min(1)
+  .max(40)
+  .regex(/^[\w åäöÅÄÖ-]+$/, "plannamn får bara innehålla bokstäver, siffror och bindestreck")
+  .default(DEFAULT_PLAN_ID)
+  .describe(
+    `Vilken plan behoven hör till. Default "${DEFAULT_PLAN_ID}". Använd ett eget ` +
+      "namn för en separat inköpsomgång.",
+  );
+
+/** Answers to surplus questions, keyed by ingredient. */
+function surplusKeys(description: string) {
+  return z
+    .array(z.string().min(1).max(60))
+    .max(60)
+    .default([])
+    .describe(
+      `${description} Nyckeln är ingrediensens sökterm i gemener, som den står i ` +
+        "fältet nyckel i svaret från willys_plan_status.",
+    );
+}
 
 export const Inputs = {
   login: z
@@ -190,6 +218,131 @@ export const Inputs = {
       limit: z.number().int().min(1).max(25).default(10),
     })
     .strict(),
+
+  // --- Måltidsplanering ------------------------------------------------------
+
+  plan_add_recipe: z
+    .object({
+      sessionId,
+      plan: planId,
+      recipe: z
+        .string()
+        .min(1)
+        .max(80)
+        .describe(
+          "Receptets namn, t.ex. \"Fisksoppa måndag\". Samma namn igen ERSÄTTER " +
+            "det tidigare bidraget i stället för att dubblera — använd det när " +
+            "ett recept ska rättas.",
+        ),
+      ingredients: z
+        .array(
+          z
+            .object({
+              query: z
+                .string()
+                .min(1)
+                .max(60)
+                .describe(
+                  "Sökterm för varan, t.ex. \"ägg\" eller \"vispgrädde\". Detta är " +
+                    "också nyckeln behov slås ihop på — skriv samma term för samma " +
+                    "vara i olika recept, annars aggregeras de inte.",
+                ),
+              amount: z
+                .string()
+                .min(1)
+                .max(30)
+                .describe(
+                  "Mängd med enhet: \"6 st\", \"400 g\", \"8 dl\", \"1 kg\". Ett tal " +
+                    "utan enhet avvisas. Räkna om receptets mängd till portionerna " +
+                    "du faktiskt lagar innan du skickar den.",
+                ),
+              label: z
+                .string()
+                .max(60)
+                .optional()
+                .describe("Läsbar etikett för utskrift. Default: query."),
+              category: z
+                .string()
+                .max(60)
+                .optional()
+                .describe(
+                  "Kategorifacett från willys_find_cheapest, t.ex. \"Mejeri\". " +
+                    "Kraftigt rekommenderad för varor vars namn är tvetydigt.",
+                ),
+              requireSwedishMeat: z
+                .boolean()
+                .default(false)
+                .describe("Kräv svensk köttmärkning. Använd för kött och fågel."),
+              mustContain: z
+                .array(z.string().min(1).max(40))
+                .max(5)
+                .default([])
+                .describe(
+                  "Ord produktnamnet måste innehålla. Sätt detta när söktermen " +
+                    "riskerar att matcha fel vara.",
+                ),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(60),
+    })
+    .strict(),
+
+  plan_remove_recipe: z
+    .object({
+      plan: planId,
+      recipe: z.string().min(1).max(80).describe("Exakt receptnamn att ta bort."),
+    })
+    .strict(),
+
+  plan_status: z
+    .object({
+      sessionId,
+      plan: planId,
+      acceptSurplus: surplusKeys(
+        "Ingrediensnycklar där du redan fått ja till det billigare valet med " +
+          "överskott. De slutar fråga.",
+      ),
+      preferTight: surplusKeys(
+        "Ingrediensnycklar där användaren sagt nej till överskott. Dyrare men " +
+          "tätare förpackning väljs.",
+      ),
+    })
+    .strict(),
+
+  plan_apply: z
+    .object({
+      sessionId,
+      plan: planId,
+      dryRun: z
+        .boolean()
+        .default(true)
+        .describe(
+          "true visar vad som SKULLE ändras utan att röra kundvagnen. Kör alltid " +
+            "true först och visa resultatet för användaren. Sätt false endast " +
+            "efter uttryckligt godkännande — det ändrar en riktig kundvagn.",
+        ),
+      acceptSurplus: surplusKeys(
+        "Nycklar där användaren godkänt billigare val med överskott.",
+      ),
+      preferTight: surplusKeys(
+        "Nycklar där användaren avböjt överskott.",
+      ),
+    })
+    .strict(),
+
+  plan_clear: z
+    .object({
+      plan: planId,
+      confirm: z
+        .literal(true)
+        .describe(
+          "Måste vara true. Raderar hela planen inklusive vilka produkter som " +
+            "valts — kundvagnen töms dock inte.",
+        ),
+    })
+    .strict(),
 } as const;
 
 /** JSON Schema advertised to the client, derived from the same Zod source. */
@@ -345,6 +498,43 @@ export const TOOLS = [
     description:
       "Vanligast köpta varor, härledda ur din faktiska orderhistorik (inte CMS-sidan, som saknar produktdata).",
     schema: Inputs.get_frequent_products,
+  },
+  {
+    name: TOOL.planAddRecipe,
+    description:
+      "Lägg ett recepts ingredienser i behovsregistret. Mängder slås ihop per vara " +
+      "över alla recept i planen, så tre recept som vill ha ägg blir ETT behov. " +
+      "Rör inte kundvagnen — kör willys_plan_apply för det.",
+    schema: Inputs.plan_add_recipe,
+  },
+  {
+    name: TOOL.planRemoveRecipe,
+    description:
+      "Ta bort ett recept ur planen. Behoven räknas om; varor som bara det receptet " +
+      "krävde försvinner ur den föreslagna korgen.",
+    schema: Inputs.plan_remove_recipe,
+  },
+  {
+    name: TOOL.planStatus,
+    description:
+      "Visa vad planen kräver, vilken produkt och mängd som föreslås för varje vara, " +
+      "vad det kostar, och vilka val som väntar på svar om överskott. Läser bara — " +
+      "ändrar varken plan eller kundvagn. Kör detta innan willys_plan_apply.",
+    schema: Inputs.plan_status,
+  },
+  {
+    name: TOOL.planApply,
+    description:
+      "Synka kundvagnen mot planen. Skickar BARA differensen: rätt vara i rätt antal " +
+      "ger inget anrop, växande behov byter förpackning eller höjer antalet. " +
+      "dryRun=true (default) visar ändringarna utan att röra vagnen.",
+    schema: Inputs.plan_apply,
+  },
+  {
+    name: TOOL.planClear,
+    description:
+      "Nollställ planen. Tömmer INTE kundvagnen — den behåller det som redan lagts i.",
+    schema: Inputs.plan_clear,
   },
 ] as const;
 

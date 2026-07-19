@@ -22,6 +22,19 @@ import {
 import { log } from "./core/logger.js";
 import { explain, type Result } from "./core/result.js";
 import { compact, prune, pruneProduct } from "./mappers/prune.js";
+import {
+  addRecipe,
+  clearPlan,
+  listRecipes,
+  removeRecipe,
+} from "./planner/ledger.js";
+import {
+  applyPlan,
+  buildPlan,
+  type BuiltPlan,
+  type PlanAction,
+} from "./planner/reconcile.js";
+import type { Measure } from "./domain/volume.js";
 import * as api from "./upstream/index.js";
 import { findCheapest } from "./upstream/cheapest.js";
 import * as stores from "./upstream/stores.js";
@@ -369,6 +382,111 @@ async function dispatch(
       return respond(r, (n) => `Butiksregistret uppdaterat: ${n} butiker.`);
     }
 
+    case TOOL.planAddRecipe: {
+      const a = args as z.infer<typeof Inputs.plan_add_recipe>;
+      const r = addRecipe(a.plan, a.recipe, a.ingredients);
+      return text(
+        compact({
+          plan: a.plan,
+          recept: a.recipe,
+          upplagda_ingredienser: r.accepted,
+          ...(r.rejected.length > 0 ? { avvisade: r.rejected } : {}),
+          recept_i_planen: listRecipes(a.plan),
+          nasta_steg:
+            "Kör willys_plan_status för att se föreslagen korg och totalkostnad.",
+        }),
+      );
+    }
+
+    case TOOL.planRemoveRecipe: {
+      const a = args as z.infer<typeof Inputs.plan_remove_recipe>;
+      const removed = removeRecipe(a.plan, a.recipe);
+      if (removed === 0) {
+        return failure(
+          `Inget recept med namnet "${a.recipe}" i planen ${a.plan}. ` +
+            `Finns: ${listRecipes(a.plan).join(", ") || "(inga)"}`,
+        );
+      }
+      return text(
+        compact({
+          plan: a.plan,
+          borttaget_recept: a.recipe,
+          borttagna_rader: removed,
+          recept_kvar: listRecipes(a.plan),
+        }),
+      );
+    }
+
+    case TOOL.planStatus: {
+      const a = args as z.infer<typeof Inputs.plan_status>;
+      const c = cookiesFor(a.sessionId);
+      if (typeof c !== "string") return c;
+
+      const r = await buildPlan(c, a.plan, {
+        acceptSurplus: a.acceptSurplus,
+        preferTight: a.preferTight,
+      });
+      return respond(r, renderPlan);
+    }
+
+    case TOOL.planApply: {
+      const a = args as z.infer<typeof Inputs.plan_apply>;
+      const c = cookiesFor(a.sessionId);
+      if (typeof c !== "string") return c;
+
+      const built = await buildPlan(c, a.plan, {
+        acceptSurplus: a.acceptSurplus,
+        preferTight: a.preferTight,
+      });
+      if (!built.ok) return respond(built, renderPlan);
+
+      const applied = await applyPlan(c, built.data, a.dryRun);
+      return respond(applied, (d) =>
+        compact({
+          plan: a.plan,
+          lage: d.dryRun ? "TORRKÖRNING — kundvagnen orörd" : "APPLICERAT",
+          andringar: d.changes.map((ch) => ({
+            vara: ch.label,
+            atgard: ch.action,
+            detalj: ch.detail,
+            ...(ch.ok ? {} : { fel: ch.error }),
+          })),
+          hoppade_over: d.skipped,
+          misslyckade: d.failed,
+          kundvagn_fore: d.cartItemsBefore,
+          ...(d.dryRun ? {} : { kundvagn_efter: d.cartItemsAfter }),
+          berakn_summa: d.totalCost,
+          ...(built.data.pendingDecisions > 0
+            ? {
+                obesvarade_beslut: built.data.pendingDecisions,
+                notering:
+                  "Rader med obesvarad överskottsfråga hoppades över. Svara via " +
+                  "acceptSurplus eller preferTight och kör om.",
+              }
+            : {}),
+          ...(d.dryRun
+            ? {
+                nasta_steg:
+                  "Visa detta för användaren. Kör om med dryRun=false först efter godkännande.",
+              }
+            : {}),
+        }),
+      );
+    }
+
+    case TOOL.planClear: {
+      const a = args as z.infer<typeof Inputs.plan_clear>;
+      const r = clearPlan(a.plan);
+      return text(
+        compact({
+          plan: a.plan,
+          raderade_behov: r.items,
+          raderade_val: r.choices,
+          notering: "Kundvagnen är oförändrad.",
+        }),
+      );
+    }
+
     default: {
       // If a tool is added to TOOL but not handled above, `name` is no longer
       // `never` here and this line fails to compile. The switch cannot drift
@@ -377,6 +495,88 @@ async function dispatch(
       return failure(`Okänt verktyg: ${String(unhandled)}`);
     }
   }
+}
+
+/**
+ * Render a plan for the model.
+ *
+ * Deliberately states provenance ("13 st = Mån:6 + Ons:4 + Tors:3") and the
+ * action per line, so the model can explain a change rather than announce it.
+ * Pending surplus questions are hoisted to their own field: they are the one
+ * thing that must not scroll past unanswered.
+ */
+function renderPlan(d: BuiltPlan): string {
+  return compact({
+    plan: d.planId,
+    summa: d.totalCost,
+    ...(d.pendingDecisions > 0 ? { obesvarade_beslut: d.pendingDecisions } : {}),
+    ...(d.unresolved > 0 ? { olosta_rader: d.unresolved } : {}),
+
+    behov: d.lines.map((l) => ({
+      nyckel: l.need.key,
+      vara: l.need.label,
+      behov: `${formatNeed(l.need.amount, l.need.measure)} = ${l.need.sources
+        .map((s) => `${s.recipe}:${s.raw}`)
+        .join(" + ")}`,
+      ...(l.chosen
+        ? {
+            forslag: `${l.chosen.packages}× ${l.chosen.name} (${l.chosen.packSize})`,
+            kostnad: l.chosen.totalCost,
+            overskott: formatNeed(l.chosen.surplus, l.need.measure),
+          }
+        : { forslag: null }),
+      atgard: describeAction(l.action),
+      ...(l.decision ? { beslut_kravs: l.decision.question } : {}),
+      ...(l.droppedCategory
+        ? {
+            varning:
+              `kategorin "${l.droppedCategory.requested}" finns inte för söktermen ` +
+              `och ignorerades. Giltiga: ${l.droppedCategory.available.slice(0, 8).join(", ")}`,
+          }
+        : {}),
+    })),
+
+    ...(d.conflicts.length > 0
+      ? {
+          konflikter: d.conflicts.map((c) => ({
+            vara: c.label,
+            problem:
+              "recepten anger olika måttslag som inte går att slå ihop utan att gissa",
+            varianter: c.measures.map(
+              (m) => `${formatNeed(m.amount, m.measure)} (${m.recipes.join(", ")})`,
+            ),
+            atgard: "be användaren ange en gemensam enhet och lägg om receptet",
+          })),
+        }
+      : {}),
+  });
+}
+
+function describeAction(a: PlanAction): string {
+  switch (a.kind) {
+    case "none":
+      return `oförändrad — ${a.reason}`;
+    case "add":
+      return `lägg till ${a.packages} st`;
+    case "change_quantity":
+      return `ändra antal ${a.from} → ${a.to}`;
+    case "replace":
+      return `byt ${a.fromName} → ${a.toName} (${a.packages} st)`;
+    case "blocked":
+      return `blockerad — ${a.reason}`;
+  }
+}
+
+/** Normalised amounts are grams / millilitres / items; print them readably. */
+function formatNeed(amount: number, measure: Measure): string {
+  if (measure === "count") return `${Math.round(amount)} st`;
+  const big = measure === "mass" ? "kg" : "l";
+  const small = measure === "mass" ? "g" : "ml";
+  if (amount >= 1000) {
+    const v = amount / 1000;
+    return `${Number.isInteger(v) ? v : v.toFixed(2)} ${big}`;
+  }
+  return `${Math.round(amount)} ${small}`;
 }
 
 async function main(): Promise<void> {

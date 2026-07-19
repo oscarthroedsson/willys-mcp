@@ -26,7 +26,17 @@ export const TOOL = {
   refreshStores: "willys_refresh_stores",
   findCheapest: "willys_find_cheapest",
   getCampaigns: "willys_get_campaigns",
+
+  // Meal planning: the cart as a projection of accumulated recipe needs.
+  planAddRecipe: "willys_plan_add_recipe",
+  planRemoveRecipe: "willys_plan_remove_recipe",
+  planStatus: "willys_plan_status",
+  planApply: "willys_plan_apply",
+  planClear: "willys_plan_clear",
 } as const;
+
+/** Plans are named so several can run in parallel (veckan, fest, storkok). */
+export const DEFAULT_PLAN_ID = "standard";
 
 export type ToolName = (typeof TOOL)[keyof typeof TOOL];
 
