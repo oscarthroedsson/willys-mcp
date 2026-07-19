@@ -36,7 +36,12 @@ import {
 } from "./planner/reconcile.js";
 import type { Measure } from "./domain/volume.js";
 import path from "node:path";
-import { initEnvFile, inspectSetup, setupBlocker } from "./setup.js";
+import {
+  initEnvFile,
+  inspectSetup,
+  setupBlocker,
+  PASSWORD_HELP,
+} from "./setup.js";
 import * as api from "./upstream/index.js";
 import { findCheapest } from "./upstream/cheapest.js";
 import * as stores from "./upstream/stores.js";
@@ -138,9 +143,12 @@ async function dispatch(
                 fil_att_fylla_i: r.envFile,
                 mall_att_utga_ifran: r.envExample,
                 steg: r.steps,
+                ...(r.passwordHelp ? { losenordshjalp: r.passwordHelp } : {}),
                 notering:
                   "Visa stegen ordagrant för användaren. Du kan inte utföra dem " +
-                  "åt dem — de kräver att någon redigerar en fil på datorn.",
+                  "åt dem — de kräver att någon redigerar en fil på datorn. " +
+                  "Finns losenordshjalp: gå igenom den INNAN du ber dem fylla i " +
+                  "filen, annars letar de efter ett lösenord som inte finns.",
               }),
           kontroller: r.checks.map((c) => ({
             kontroll: c.label,
@@ -170,6 +178,10 @@ async function dispatch(
                   "WILLYS_USERNAME är personnummer (10 eller 12 siffror) eller " +
                   "Willys Plus-nummer (16 siffror). Spara, starta om servern i " +
                   "klienten, och säg till så verifierar jag.",
+                fraga_forst:
+                  "Kolla om de någonsin loggat in på willys.se med lösenord. " +
+                  "Har de bara använt BankID finns inget lösenord att fylla i — " +
+                  `${PASSWORD_HELP.ifNever} ${PASSWORD_HELP.where} ${PASSWORD_HELP.fallback}`,
               }
             : {}),
           notering: r.note,

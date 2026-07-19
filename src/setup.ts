@@ -43,6 +43,17 @@ export interface SetupReport {
   checks: SetupCheck[];
   /** Ordered, copy-pasteable steps. Empty when ready. */
   steps: string[];
+  /**
+   * Set when the password is missing. The account itself may be the blocker,
+   * not the file, and that distinction has to reach the user before they go
+   * hunting for a password that was never created.
+   */
+  passwordHelp?: {
+    whatToFill: string;
+    ifYouNeverSetOne: string;
+    whereToSetIt: string;
+    ifThatFails: string;
+  };
 }
 
 const ENV_FILE = (): string =>
@@ -113,6 +124,27 @@ function checkUsername(): SetupCheck {
   };
 }
 
+/**
+ * Willys' login is a Spring Security form post (j_username / j_password), so a
+ * password must exist on the account. Anyone who has only ever used BankID does
+ * not have one, and no amount of configuration will help until they create it —
+ * which is why this fix text is about the account, not about the file.
+ */
+export const PASSWORD_HELP = {
+  ifNever:
+    "Har du aldrig loggat in med lösenord (bara BankID) finns det inget " +
+    "lösenord att fylla i än — du måste skapa ett hos Willys först.",
+  where:
+    "Gå till https://www.willys.se/anvandare/inloggning och leta efter " +
+    "alternativet för glömt eller nytt lösenord. Har du inget konto alls " +
+    "börjar du på https://www.willys.se/registrera/privat/identifiera",
+  fallback:
+    "Hittar du inget sådant alternativ: kontakta Willys kundtjänst och be dem " +
+    "aktivera lösenordsinloggning för kontot. Servern kan inte använda BankID — " +
+    "den loggar in genom att fylla i ett formulär, och BankID kräver att du " +
+    "signerar i din telefon vid varje anrop.",
+} as const;
+
 function checkPassword(): SetupCheck {
   const raw = process.env.WILLYS_PASSWORD;
   if (!raw || raw.trim().length === 0) {
@@ -122,8 +154,8 @@ function checkPassword(): SetupCheck {
       status: "missing",
       detail: "inte satt",
       fix:
-        "Sätt WILLYS_PASSWORD till lösenordet för willys.se. " +
-        "BankID-inloggning stöds inte — kontot måste ha ett lösenord.",
+        "Sätt WILLYS_PASSWORD till ditt lösenord för willys.se. " +
+        `${PASSWORD_HELP.ifNever} ${PASSWORD_HELP.where}`,
     };
   }
   return {
@@ -262,6 +294,10 @@ export function inspectSetup(): SetupReport {
     );
   }
 
+  const passwordMissing = checks.some(
+    (c) => c.id === "password" && c.status === "missing",
+  );
+
   return {
     ready: blockers.length === 0,
     envFile: ENV_FILE(),
@@ -269,6 +305,19 @@ export function inspectSetup(): SetupReport {
     projectRoot: PROJECT_ROOT,
     checks,
     steps,
+    ...(passwordMissing
+      ? {
+          passwordHelp: {
+            whatToFill:
+              "WILLYS_USERNAME = personnummer (10 eller 12 siffror) eller " +
+              "Willys Plus-nummer (16 siffror). WILLYS_PASSWORD = ditt " +
+              "lösenord till willys.se.",
+            ifYouNeverSetOne: PASSWORD_HELP.ifNever,
+            whereToSetIt: PASSWORD_HELP.where,
+            ifThatFails: PASSWORD_HELP.fallback,
+          },
+        }
+      : {}),
   };
 }
 
