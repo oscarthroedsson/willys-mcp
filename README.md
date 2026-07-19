@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/header.png" alt="willys-mcp" width="100%">
+<img src="assets/header.jpg" alt="Ingredienser som flödar genom en beräkningsgraf in i en kundvagn" width="100%">
 
 <h1>willys-mcp</h1>
 
