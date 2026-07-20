@@ -142,26 +142,47 @@ export async function harvestCookies(
     await user.type(creds.username, { delay: LOGIN_TIMING.typeDelayMs });
     await pass.type(creds.password, { delay: LOGIN_TIMING.typeDelayMs });
 
-    // Native Puppeteer click, NOT element.click() inside page.evaluate().
-    // The DOM click dispatches an untrusted event; Willys' submit handler
-    // ignores it silently — form stays put, no request, no error.
+    // Submitting is the fragile step, and it has broken twice for different
+    // reasons. Two mechanisms are tried in order rather than picking one:
+    //
+    //   1. Native Puppeteer click on the submit button. This is what worked
+    //      when the flow was first mapped. A DOM click from inside
+    //      page.evaluate() does NOT work — it dispatches an untrusted event
+    //      that Willys' handler ignores silently.
+    //   2. form.requestSubmit(). Verified 2026-07-20: the native click had
+    //      stopped triggering submission entirely — no request left the page,
+    //      the form stayed put and no error was shown, which reads exactly
+    //      like bad credentials. requestSubmit() submits the same form and
+    //      logs in correctly.
+    //
+    // Keeping both means a change on either side degrades to the other rather
+    // than to a silent failure.
     const buttons = await page.$$("button");
-    let clicked = false;
     for (const b of buttons) {
       const label = (await b.evaluate((e) => e.textContent ?? "")).trim();
       if (label.toLowerCase() === LOGIN_BUTTON_TEXT) {
         await b.click();
-        clicked = true;
         break;
       }
     }
-    if (!clicked) {
-      // Fallback: submit by pressing Enter in the password field.
-      await page.focus(LOGIN_SELECTORS.password);
-      await page.keyboard.press("Enter");
-    }
 
     await new Promise((r) => setTimeout(r, LOGIN_TIMING.afterSubmitMs));
+
+    // Still on the form? The click did nothing. Submit the form itself.
+    if (await page.$(LOGIN_SELECTORS.stillOnForm)) {
+      log.debug("knappklicket skickade inte formuläret, provar requestSubmit()");
+      await page.evaluate((sel: string) => {
+        const form = document.querySelector(sel)?.closest("form");
+        if (!form) return;
+        if (typeof (form as HTMLFormElement).requestSubmit === "function") {
+          (form as HTMLFormElement).requestSubmit();
+        } else {
+          (form as HTMLFormElement).submit();
+        }
+      }, LOGIN_SELECTORS.password);
+
+      await new Promise((r) => setTimeout(r, LOGIN_TIMING.afterSubmitMs));
+    }
 
     // Capture page state BEFORE validating. The previous implementation
     // validated first and threw, discarding the only evidence of what went
