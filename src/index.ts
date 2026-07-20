@@ -170,7 +170,7 @@ async function dispatch(
           oppnad: opened,
           status: opened
             ? "Filen är öppnad i användarens editor. Be dem fylla i raderna, " +
-              "spara, och starta om servern i klienten."
+              "och spara. Ingen omstart behövs."
             : "Kunde inte öppna filen automatiskt. Be dem öppna den manuellt.",
           fyll_i:
             "WILLYS_USERNAME = personnummer (10 eller 12 siffror) eller " +
@@ -197,8 +197,8 @@ async function dispatch(
                 sa_har_ber_du_dem:
                   `Öppna ${r.envFile} och fyll i ${r.remaining.join(" och ")}. ` +
                   "WILLYS_USERNAME är personnummer (10 eller 12 siffror) eller " +
-                  "Willys Plus-nummer (16 siffror). Spara, starta om servern i " +
-                  "klienten, och säg till så verifierar jag.",
+                  "Willys Plus-nummer (16 siffror). Spara filen och säg till — ingen " +
+                  "omstart behövs, servern läser om den automatiskt.",
                 fraga_forst:
                   "Kolla om de någonsin loggat in på willys.se med lösenord. " +
                   "Har de bara använt BankID finns inget lösenord att fylla i — " +

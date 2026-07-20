@@ -48,7 +48,7 @@ Så här:
                        Willys Plus-nummer (16 siffror)
      WILLYS_PASSWORD   lösenordet till willys.se
 
-   Spara, starta om servern i klienten.
+   Spara filen. Ingen omstart behövs — servern läser om .env när den ändrats.
 
 6. När de säger att de är klara: kör willys_setup igen och bekräfta. Är
    användarnamnet fel format säger kontrollen exakt vad som är fel — förklara

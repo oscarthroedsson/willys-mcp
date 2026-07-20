@@ -290,8 +290,9 @@ export function inspectSetup(): SetupReport {
         `${steps.length + 1}. Se till att ${path.dirname(DB_PATH)} är skrivbar`,
       );
     }
+    // No restart step: loadEnv re-reads on mtime change, so saving is enough.
     steps.push(
-      `${steps.length + 1}. Starta om MCP-servern i din klient och kör willys_setup igen`,
+      `${steps.length + 1}. Spara filen och säg till — ingen omstart behövs`,
     );
   }
 
@@ -429,7 +430,7 @@ export function initEnvFile(storeId?: string, open = true): InitResult {
     opened,
     note:
       remaining.length === 0
-        ? "Allt ifyllt. Starta om MCP-servern i klienten och kör willys_login."
+        ? "Allt ifyllt. Kör willys_login — ingen omstart behövs."
         : "Fråga ALDRIG efter lösenord eller personnummer i chatten — de ska " +
           "bara skrivas i filen.",
   };
