@@ -9,6 +9,7 @@
 export const TOOL = {
   setup: "willys_setup",
   setupInit: "willys_setup_init",
+  setupOpenEnv: "willys_setup_open_env",
   login: "willys_login",
   checkAuth: "willys_check_auth",
   logout: "willys_logout",

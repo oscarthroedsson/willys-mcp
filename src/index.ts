@@ -39,6 +39,7 @@ import path from "node:path";
 import {
   initEnvFile,
   inspectSetup,
+  openInEditor,
   setupBlocker,
   PASSWORD_HELP,
 } from "./setup.js";
@@ -160,14 +161,34 @@ async function dispatch(
       );
     }
 
+    case TOOL.setupOpenEnv: {
+      const r = inspectSetup();
+      const opened = openInEditor(r.envFile);
+      return text(
+        compact({
+          fil: r.envFile,
+          oppnad: opened,
+          status: opened
+            ? "Filen är öppnad i användarens editor. Be dem fylla i raderna, " +
+              "spara, och starta om servern i klienten."
+            : "Kunde inte öppna filen automatiskt. Be dem öppna den manuellt.",
+          fyll_i:
+            "WILLYS_USERNAME = personnummer (10 eller 12 siffror) eller " +
+            "Willys Plus-nummer (16 siffror). WILLYS_PASSWORD = lösenordet " +
+            "till willys.se.",
+        }),
+      );
+    }
+
     case TOOL.setupInit: {
       const a = args as z.infer<typeof Inputs.setup_init>;
-      const r = initEnvFile(a.storeId);
+      const r = initEnvFile(a.storeId, a.openFile);
       return text(
         compact({
           fil: r.envFile,
           lank_att_visa: `[${path.basename(r.envFile)}](${r.envFile})`,
           skapad: r.created,
+          oppnad_i_editor: r.opened,
           ...(r.storeIdWritten ? { butik_ifylld: r.storeIdWritten } : {}),
           ...(r.permissionsFixed ? { rattigheter: "satta till 600" } : {}),
           kvar_att_fylla_i: r.remaining,

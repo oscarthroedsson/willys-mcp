@@ -54,8 +54,18 @@ function surplusKeys(description: string) {
 export const Inputs = {
   setup: z.object({}).strict(),
 
+  setup_open_env: z.object({}).strict(),
+
   setup_init: z
     .object({
+      openFile: z
+        .boolean()
+        .default(true)
+        .describe(
+          "Öppna .env i användarens standardeditor. Default true — en " +
+            "chattklient kan inte göra en filsökväg klickbar, och .env är en " +
+            "dold fil som är besvärlig att hitta i Finder.",
+        ),
       storeId: z
         .string()
         .regex(/^\d{3,6}$/)
@@ -432,6 +442,15 @@ export const TOOLS = [
       "inloggningsuppgifterna. Ta ALDRIG emot lösenord eller personnummer — " +
       "varken här eller i chatten; de skrivs bara i filen.",
     schema: Inputs.setup_init,
+  },
+  {
+    name: TOOL.setupOpenEnv,
+    description:
+      "Öppna .env-filen i användarens standardeditor. Använd när de ska fylla i " +
+      "eller rätta sina uppgifter — en chattklient kan inte göra en filsökväg " +
+      "klickbar, och .env är dold i Finder. Läser inte filen och ser aldrig " +
+      "innehållet.",
+    schema: Inputs.setup_open_env,
   },
   {
     name: TOOL.login,

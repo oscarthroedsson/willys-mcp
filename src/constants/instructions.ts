@@ -35,8 +35,14 @@ Så här:
 4. FRÅGA om de någonsin loggat in på willys.se med lösenord, eller bara med
    BankID. Det här steget får inte hoppas över — se nedan.
 
-5. Visa sökvägen till .env som en KLICKBAR markdown-länk så de kan öppna filen
-   direkt: fältet lank_att_visa i svaret är färdigformaterat. Be dem fylla i:
+5. ÖPPNA filen åt dem. willys_setup_init gör det automatiskt; behöver den
+   öppnas igen senare, kör willys_setup_open_env.
+
+   Skriv aldrig bara ut sökvägen och lämna dem där. En chattklient gör inte
+   filsökvägar klickbara, och .env är dold i Finder — de kommer inte hitta den.
+   Servern kör på deras dator och kan öppna filen. Gör det.
+
+   Be dem fylla i:
 
      WILLYS_USERNAME   personnummer (10 eller 12 siffror), eller
                        Willys Plus-nummer (16 siffror)

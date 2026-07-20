@@ -7,6 +7,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { DB_PATH, PROJECT_ROOT } from "./config.js";
 import { USERNAME_PATTERN } from "./constants/index.js";
@@ -328,7 +329,40 @@ export interface InitResult {
   permissionsFixed: boolean;
   /** Variables the user must still fill in by hand. */
   remaining: string[];
+  /** Whether the file was opened in the user's default editor. */
+  opened: boolean;
   note: string;
+}
+
+/**
+ * Open the .env in whatever the user edits text with.
+ *
+ * A chat client will not render a clickable file:// link — most block the
+ * scheme outright — so printing an absolute path leaves the user to go hunting
+ * through Finder for a dotfile, which is hidden by default. The server runs on
+ * their machine, so it can just open it.
+ *
+ * Best effort: a failure here is not a setup failure, it only means they have
+ * to open the file themselves.
+ */
+export function openInEditor(file: string): boolean {
+  const cmd =
+    process.platform === "darwin"
+      ? "open"
+      : process.platform === "win32"
+        ? "start"
+        : "xdg-open";
+  try {
+    const child = spawn(cmd, [file], {
+      detached: true,
+      stdio: "ignore",
+      shell: process.platform === "win32",
+    });
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -341,7 +375,7 @@ export interface InitResult {
  * whatever logs sit behind it. Those two lines stay a local edit, and the model
  * hands over a path instead of asking for a value.
  */
-export function initEnvFile(storeId?: string): InitResult {
+export function initEnvFile(storeId?: string, open = true): InitResult {
   const file = ENV_FILE();
   const template = path.join(PROJECT_ROOT, ".env.example");
 
@@ -383,17 +417,21 @@ export function initEnvFile(storeId?: string): InitResult {
   if (isBlank("WILLYS_USERNAME")) remaining.push("WILLYS_USERNAME");
   if (isBlank("WILLYS_PASSWORD")) remaining.push("WILLYS_PASSWORD");
 
+  // Only worth opening when something is actually left to type.
+  const opened = open && remaining.length > 0 ? openInEditor(file) : false;
+
   return {
     envFile: file,
     created,
     storeIdWritten,
     permissionsFixed,
     remaining,
+    opened,
     note:
       remaining.length === 0
         ? "Allt ifyllt. Starta om MCP-servern i klienten och kör willys_login."
-        : "Be användaren öppna filen och fylla i raderna som saknas. Fråga ALDRIG " +
-          "efter lösenord eller personnummer i chatten — de ska bara skrivas i filen.",
+        : "Fråga ALDRIG efter lösenord eller personnummer i chatten — de ska " +
+          "bara skrivas i filen.",
   };
 }
 
