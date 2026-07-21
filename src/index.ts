@@ -35,7 +35,6 @@ import {
   type PlanAction,
 } from "./planner/reconcile.js";
 import type { Measure } from "./domain/volume.js";
-import path from "node:path";
 import {
   initEnvFile,
   inspectSetup,
@@ -43,6 +42,7 @@ import {
   setupBlocker,
   PASSWORD_HELP,
 } from "./setup.js";
+import { readHelp } from "./help.js";
 import * as api from "./upstream/index.js";
 import { findCheapest } from "./upstream/cheapest.js";
 import * as stores from "./upstream/stores.js";
@@ -132,6 +132,25 @@ async function dispatch(
   args: never,
 ): Promise<ToolResponse> {
   switch (name) {
+    case TOOL.help: {
+      const a = args as z.infer<typeof Inputs.help>;
+      return text(readHelp(a.topic));
+    }
+
+    case TOOL.openFile: {
+      const a = args as z.infer<typeof Inputs.open_file>;
+      const opened = openInEditor(a.path);
+      return text(
+        compact({
+          fil: a.path,
+          oppnad: opened,
+          status: opened
+            ? "Öppnad i användarens editor."
+            : "Kunde inte öppna filen. Be användaren öppna den manuellt.",
+        }),
+      );
+    }
+
     case TOOL.setup: {
       const r = inspectSetup();
       return text(
@@ -140,16 +159,15 @@ async function dispatch(
           ...(r.ready
             ? { status: "Servern är konfigurerad och redo. Kör willys_login." }
             : {
-                status: "Servern är INTE konfigurerad än.",
+                status: "Servern är inte konfigurerad än.",
                 fil_att_fylla_i: r.envFile,
-                mall_att_utga_ifran: r.envExample,
                 steg: r.steps,
                 ...(r.passwordHelp ? { losenordshjalp: r.passwordHelp } : {}),
                 notering:
-                  "Visa stegen ordagrant för användaren. Du kan inte utföra dem " +
-                  "åt dem — de kräver att någon redigerar en fil på datorn. " +
-                  "Finns losenordshjalp: gå igenom den INNAN du ber dem fylla i " +
-                  "filen, annars letar de efter ett lösenord som inte finns.",
+                  "Ta användaren genom uppsättningen — se willys_help(\"setup\"). " +
+                  "Öppna filen åt dem med willys_open_file. Finns losenordshjalp, " +
+                  "gå igenom den först: annars letar de efter ett lösenord som " +
+                  "aldrig skapats.",
               }),
           kontroller: r.checks.map((c) => ({
             kontroll: c.label,
@@ -161,48 +179,26 @@ async function dispatch(
       );
     }
 
-    case TOOL.setupOpenEnv: {
-      const r = inspectSetup();
-      const opened = openInEditor(r.envFile);
-      return text(
-        compact({
-          fil: r.envFile,
-          oppnad: opened,
-          status: opened
-            ? "Filen är öppnad i användarens editor. Be dem fylla i raderna, " +
-              "och spara. Ingen omstart behövs."
-            : "Kunde inte öppna filen automatiskt. Be dem öppna den manuellt.",
-          fyll_i:
-            "WILLYS_USERNAME = personnummer (10 eller 12 siffror) eller " +
-            "Willys Plus-nummer (16 siffror). WILLYS_PASSWORD = lösenordet " +
-            "till willys.se.",
-        }),
-      );
-    }
-
     case TOOL.setupInit: {
       const a = args as z.infer<typeof Inputs.setup_init>;
-      const r = initEnvFile(a.storeId, a.openFile);
+      const r = initEnvFile(a.storeId);
       return text(
         compact({
           fil: r.envFile,
-          lank_att_visa: `[${path.basename(r.envFile)}](${r.envFile})`,
           skapad: r.created,
-          oppnad_i_editor: r.opened,
           ...(r.storeIdWritten ? { butik_ifylld: r.storeIdWritten } : {}),
           ...(r.permissionsFixed ? { rattigheter: "satta till 600" } : {}),
           kvar_att_fylla_i: r.remaining,
           ...(r.remaining.length > 0
             ? {
-                sa_har_ber_du_dem:
-                  `Öppna ${r.envFile} och fyll i ${r.remaining.join(" och ")}. ` +
-                  "WILLYS_USERNAME är personnummer (10 eller 12 siffror) eller " +
-                  "Willys Plus-nummer (16 siffror). Spara filen och säg till — ingen " +
-                  "omstart behövs, servern läser om den automatiskt.",
+                nasta_steg:
+                  `Öppna filen åt dem: willys_open_file med path "${r.envFile}". ` +
+                  `Be dem fylla i ${r.remaining.join(" och ")} och spara — ingen ` +
+                  "omstart behövs.",
                 fraga_forst:
-                  "Kolla om de någonsin loggat in på willys.se med lösenord. " +
-                  "Har de bara använt BankID finns inget lösenord att fylla i — " +
-                  `${PASSWORD_HELP.ifNever} ${PASSWORD_HELP.where} ${PASSWORD_HELP.fallback}`,
+                  "Kolla först om de loggat in på willys.se med lösenord eller " +
+                  "bara med BankID. Bara BankID = inget lösenord finns än. " +
+                  `${PASSWORD_HELP.ifNever} ${PASSWORD_HELP.where}`,
               }
             : {}),
           notering: r.note,

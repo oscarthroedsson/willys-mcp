@@ -6,6 +6,7 @@ import {
   PRODUCT_CODE_PATTERN,
   TOOL,
 } from "../constants/index.js";
+import { HELP_TOPICS } from "../help.js";
 
 /**
  * Tool input contracts.
@@ -52,20 +53,34 @@ function surplusKeys(description: string) {
 }
 
 export const Inputs = {
-  setup: z.object({}).strict(),
+  help: z
+    .object({
+      topic: z
+        .enum(HELP_TOPICS)
+        .describe(
+          'Ämne att läsa: "security" (är det säkert att logga in), "setup", ' +
+            '"search", "planning", "errors".',
+        ),
+    })
+    .strict(),
 
-  setup_open_env: z.object({}).strict(),
+  open_file: z
+    .object({
+      path: z
+        .string()
+        .min(1)
+        .describe(
+          "Absolut sökväg till filen som ska öppnas i användarens standardeditor. " +
+            "Använd för .env vid uppsättning — sökvägen står i svaret från " +
+            "willys_setup eller willys_setup_init.",
+        ),
+    })
+    .strict(),
+
+  setup: z.object({}).strict(),
 
   setup_init: z
     .object({
-      openFile: z
-        .boolean()
-        .default(true)
-        .describe(
-          "Öppna .env i användarens standardeditor. Default true — en " +
-            "chattklient kan inte göra en filsökväg klickbar, och .env är en " +
-            "dold fil som är besvärlig att hitta i Finder.",
-        ),
       storeId: z
         .string()
         .regex(/^\d{3,6}$/)
@@ -76,11 +91,7 @@ export const Inputs = {
             "träffarna och låt dem välja. Utelämna om de inte vill välja butik än.",
         ),
     })
-    .strict()
-    .describe(
-      "Tar AVSIKTLIGT varken lösenord eller personnummer. Tool-argument hamnar " +
-        "i konversationen; hemligheter ska bara skrivas direkt i .env-filen.",
-    ),
+    .strict(),
 
   login: z
     .object({
@@ -426,37 +437,44 @@ function jsonSchema(shape: z.ZodTypeAny): Record<string, unknown> {
 
 export const TOOLS = [
   {
+    name: TOOL.help,
+    description:
+      "Läs djupare hjälp om ett ämne, på begäran. De korta instruktionerna " +
+      "pekar hit för detaljer så de inte belastar varje session. Ämnen: " +
+      "security, setup, search, planning, errors.",
+    schema: Inputs.help,
+  },
+  {
+    name: TOOL.openFile,
+    description:
+      "Öppna en lokal fil i användarens standardeditor. Använd för att öppna " +
+      ".env åt dem vid uppsättning — sökvägen står i svaret från willys_setup. " +
+      "En chattklient gör inte filsökvägar klickbara. Läser inte innehållet.",
+    schema: Inputs.open_file,
+  },
+  {
     name: TOOL.setup,
     description:
       "Kontrollera om servern är konfigurerad på den här datorn och få exakta " +
-      "steg om något saknas — vilken fil som ska fyllas i, med full sökväg. " +
-      "Kräver ingen session. Kör detta FÖRST om willys_login misslyckas, och " +
-      "visa stegen ordagrant för användaren: modellen kan inte fixa dem själv.",
+      "steg om något saknas, med full sökväg till filen. Kräver ingen session. " +
+      "Kör detta först om willys_login svarar SETUP_REQUIRED. Se willys_help(setup).",
     schema: Inputs.setup,
   },
   {
     name: TOOL.setupInit,
     description:
       "Skapa .env åt användaren och skriv in butiks-id, med rättigheter 600. " +
-      "Returnerar sökvägen till filen som de ska öppna för att fylla i " +
-      "inloggningsuppgifterna. Ta ALDRIG emot lösenord eller personnummer — " +
-      "varken här eller i chatten; de skrivs bara i filen.",
+      "Returnerar sökvägen till filen. Öppna den sedan med willys_open_file så " +
+      "användaren kan fylla i sina uppgifter.",
     schema: Inputs.setup_init,
-  },
-  {
-    name: TOOL.setupOpenEnv,
-    description:
-      "Öppna .env-filen i användarens standardeditor. Använd när de ska fylla i " +
-      "eller rätta sina uppgifter — en chattklient kan inte göra en filsökväg " +
-      "klickbar, och .env är dold i Finder. Läser inte filen och ser aldrig " +
-      "innehållet.",
-    schema: Inputs.setup_open_env,
   },
   {
     name: TOOL.login,
     description:
-      "Logga in på Willys. Återanvänder en giltig session om en finns (de lever 24h); " +
-      "sätt force=true för att tvinga ny inloggning. Läser WILLYS_USERNAME/WILLYS_PASSWORD.",
+      "Logga in på Willys och få ett sessionId tillbaka. Säkert att anropa: " +
+      "servern läser uppgifterna ur .env, de når aldrig din kontext (se " +
+      "willys_help(security)). Återanvänder en giltig session (24h); force=true " +
+      "tvingar ny inloggning.",
     schema: Inputs.login,
   },
   {

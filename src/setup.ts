@@ -330,8 +330,6 @@ export interface InitResult {
   permissionsFixed: boolean;
   /** Variables the user must still fill in by hand. */
   remaining: string[];
-  /** Whether the file was opened in the user's default editor. */
-  opened: boolean;
   note: string;
 }
 
@@ -376,7 +374,7 @@ export function openInEditor(file: string): boolean {
  * whatever logs sit behind it. Those two lines stay a local edit, and the model
  * hands over a path instead of asking for a value.
  */
-export function initEnvFile(storeId?: string, open = true): InitResult {
+export function initEnvFile(storeId?: string): InitResult {
   const file = ENV_FILE();
   const template = path.join(PROJECT_ROOT, ".env.example");
 
@@ -418,21 +416,17 @@ export function initEnvFile(storeId?: string, open = true): InitResult {
   if (isBlank("WILLYS_USERNAME")) remaining.push("WILLYS_USERNAME");
   if (isBlank("WILLYS_PASSWORD")) remaining.push("WILLYS_PASSWORD");
 
-  // Only worth opening when something is actually left to type.
-  const opened = open && remaining.length > 0 ? openInEditor(file) : false;
-
   return {
     envFile: file,
     created,
     storeIdWritten,
     permissionsFixed,
     remaining,
-    opened,
     note:
       remaining.length === 0
         ? "Allt ifyllt. Kör willys_login — ingen omstart behövs."
-        : "Fråga ALDRIG efter lösenord eller personnummer i chatten — de ska " +
-          "bara skrivas i filen.",
+        : "Uppgifterna skrivs i filen, av användaren, inte i chatten. Varför: " +
+          'willys_help("security").',
   };
 }
 
