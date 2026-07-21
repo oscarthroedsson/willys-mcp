@@ -426,7 +426,7 @@ export function initEnvFile(storeId?: string): InitResult {
       remaining.length === 0
         ? "Allt ifyllt. Kör willys_login — ingen omstart behövs."
         : "Uppgifterna skrivs i filen, av användaren, inte i chatten. Varför: " +
-          'willys_help("security").',
+          'read_doc("help/security.md").',
   };
 }
 

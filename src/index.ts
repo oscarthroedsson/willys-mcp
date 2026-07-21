@@ -42,7 +42,7 @@ import {
   setupBlocker,
   PASSWORD_HELP,
 } from "./setup.js";
-import { readHelp } from "./help.js";
+import { readDoc } from "./docs.js";
 import * as api from "./upstream/index.js";
 import { findCheapest } from "./upstream/cheapest.js";
 import * as stores from "./upstream/stores.js";
@@ -132,9 +132,10 @@ async function dispatch(
   args: never,
 ): Promise<ToolResponse> {
   switch (name) {
-    case TOOL.help: {
-      const a = args as z.infer<typeof Inputs.help>;
-      return text(readHelp(a.topic));
+    case TOOL.readDoc: {
+      const a = args as z.infer<typeof Inputs.read_doc>;
+      const r = readDoc(a.path);
+      return respond(r, (doc) => doc);
     }
 
     case TOOL.openFile: {
@@ -164,7 +165,7 @@ async function dispatch(
                 steg: r.steps,
                 ...(r.passwordHelp ? { losenordshjalp: r.passwordHelp } : {}),
                 notering:
-                  "Ta användaren genom uppsättningen — se willys_help(\"setup\"). " +
+                  "Ta användaren genom uppsättningen — läs read_doc(\"help/setup.md\"). " +
                   "Öppna filen åt dem med willys_open_file. Finns losenordshjalp, " +
                   "gå igenom den först: annars letar de efter ett lösenord som " +
                   "aldrig skapats.",

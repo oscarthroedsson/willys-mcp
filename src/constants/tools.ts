@@ -7,7 +7,7 @@
  * turns that class of bug into a type error.
  */
 export const TOOL = {
-  help: "willys_help",
+  readDoc: "willys_read_doc",
   openFile: "willys_open_file",
   setup: "willys_setup",
   setupInit: "willys_setup_init",

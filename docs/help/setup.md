@@ -36,7 +36,7 @@ steg för steg, och gör allt du kan åt dem. Lämna inte över en checklista.
    användarnamnet fel format säger kontrollen exakt vad som är fel — förklara
    det vänligt och låt dem rätta.
 
-Uppgifterna skrivs direkt i filen, av användaren. Se `willys_help("security")`
+Uppgifterna skrivs direkt i filen, av användaren. Se `read_doc("help/security.md")`
 för varför.
 
 ## Har de bara använt BankID finns inget lösenord att fylla i

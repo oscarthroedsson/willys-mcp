@@ -6,7 +6,7 @@ import {
   PRODUCT_CODE_PATTERN,
   TOOL,
 } from "../constants/index.js";
-import { HELP_TOPICS } from "../help.js";
+import { DOCS } from "../docs.js";
 
 /**
  * Tool input contracts.
@@ -53,13 +53,14 @@ function surplusKeys(description: string) {
 }
 
 export const Inputs = {
-  help: z
+  read_doc: z
     .object({
-      topic: z
-        .enum(HELP_TOPICS)
+      path: z
+        .string()
+        .min(1)
         .describe(
-          'Ämne att läsa: "security" (är det säkert att logga in), "setup", ' +
-            '"search", "planning", "errors".',
+          'Sökväg till dokumentet, relativt serverns docs/-mapp, t.ex. ' +
+            '"help/setup.md". Instruktionerna listar de tillgängliga.',
         ),
     })
     .strict(),
@@ -437,12 +438,14 @@ function jsonSchema(shape: z.ZodTypeAny): Record<string, unknown> {
 
 export const TOOLS = [
   {
-    name: TOOL.help,
+    name: TOOL.readDoc,
     description:
-      "Läs djupare hjälp om ett ämne, på begäran. De korta instruktionerna " +
-      "pekar hit för detaljer så de inte belastar varje session. Ämnen: " +
-      "security, setup, search, planning, errors.",
-    schema: Inputs.help,
+      "Läs ett dokument som följer med servern (t.ex. \"help/setup.md\"). " +
+      "Deterministiskt begränsad till serverns docs/-mapp — kan inte läsa .env, " +
+      "sessioner eller något annat på datorn, så den är säker att anropa fritt. " +
+      "De korta instruktionerna pekar hit för detaljer så de inte belastar varje session. " +
+      `Tillgängliga: ${Object.keys(DOCS).join(", ")}.`,
+    schema: Inputs.read_doc,
   },
   {
     name: TOOL.openFile,
@@ -457,7 +460,7 @@ export const TOOLS = [
     description:
       "Kontrollera om servern är konfigurerad på den här datorn och få exakta " +
       "steg om något saknas, med full sökväg till filen. Kräver ingen session. " +
-      "Kör detta först om willys_login svarar SETUP_REQUIRED. Se willys_help(setup).",
+      "Kör detta först om willys_login svarar SETUP_REQUIRED. Se read_doc med help/setup.md.",
     schema: Inputs.setup,
   },
   {
@@ -473,7 +476,7 @@ export const TOOLS = [
     description:
       "Logga in på Willys och få ett sessionId tillbaka. Säkert att anropa: " +
       "servern läser uppgifterna ur .env, de når aldrig din kontext (se " +
-      "willys_help(security)). Återanvänder en giltig session (24h); force=true " +
+      "read_doc med help/security.md). Återanvänder en giltig session (24h); force=true " +
       "tvingar ny inloggning.",
     schema: Inputs.login,
   },
