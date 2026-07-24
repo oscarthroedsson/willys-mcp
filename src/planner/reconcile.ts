@@ -165,18 +165,40 @@ async function candidatesFor(
   }
 
   // A category that filtered everything away is almost always wrong rather than
-  // a genuinely empty shelf. Try again without it before giving up.
+  // a genuinely empty shelf. Retry without it to learn the real facet list.
   const retry = await findCheapest(cookies, { ...base, category: undefined });
   if (!retry.ok) return retry;
 
+  const realFacets = retry.data.availableCategories.map((c) => c.name);
+
+  // The facet match is exact server-side, so a stray space or a different case
+  // in the round-tripped category yields zero hits and looks like a false
+  // negative — the report saw "Potatis & rotsaker" rejected while listed as
+  // valid. Resolve the requested category to the canonical facet and try once
+  // more before giving up.
+  const canonical = realFacets.find(
+    (f) => normaliseFacet(f) === normaliseFacet(need.category!),
+  );
+  if (canonical && canonical !== need.category) {
+    const canon = await findCheapest(cookies, { ...base, category: canonical });
+    if (canon.ok && canon.data.products.length > 0) {
+      return ok({
+        candidates: toCandidates(canon.data.products),
+        availableCategories: canon.data.availableCategories.map((c) => c.name),
+      });
+    }
+  }
+
   return ok({
     candidates: toCandidates(retry.data.products),
-    droppedCategory: {
-      requested: need.category,
-      available: retry.data.availableCategories.map((c) => c.name),
-    },
-    availableCategories: retry.data.availableCategories.map((c) => c.name),
+    droppedCategory: { requested: need.category, available: realFacets },
+    availableCategories: realFacets,
   });
+}
+
+/** Case-, whitespace- and unicode-insensitive facet key for matching. */
+function normaliseFacet(s: string): string {
+  return s.normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function decideAction(

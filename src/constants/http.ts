@@ -18,11 +18,18 @@ export const NEWRELIC = {
   appId: "772324203",
 } as const;
 
+/**
+ * Tuned for an interactive tool, not a batch job. The old 30s × 4 attempts made
+ * a single wedged request hang 2–4 minutes — long enough that the client gave
+ * up and the model burned the wait. A healthy Willys answers in well under a
+ * second, so a 12s ceiling and one retry fail fast without tripping on normal
+ * latency. Worst case is now ~25s instead of ~127s.
+ */
 export const TIMING = {
-  requestTimeoutMs: 30_000,
-  maxRetries: 3,
-  baseDelayMs: 1_000,
-  maxBackoffMs: 30_000,
+  requestTimeoutMs: 12_000,
+  maxRetries: 1,
+  baseDelayMs: 500,
+  maxBackoffMs: 2_000,
 } as const;
 
 /** Named so retry/auth logic reads as intent rather than as numbers. */
