@@ -632,6 +632,13 @@ function renderPlan(d: BuiltPlan): string {
         : { forslag: null }),
       atgard: describeAction(l.action),
       ...(l.decision ? { beslut_kravs: l.decision.question } : {}),
+      ...(l.converted
+        ? {
+            omraknat_fran_styck:
+              `${l.converted.fromCount} st ≈ ${formatNeed(l.converted.grams, "mass")} ` +
+              `(uppskattat ${l.converted.gramsEach} g/st)`,
+          }
+        : {}),
       ...(l.droppedCategory
         ? {
             varning:

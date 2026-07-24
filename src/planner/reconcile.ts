@@ -8,6 +8,7 @@ import {
 } from "../domain/coverage.js";
 import type { Product } from "../domain/product.js";
 import { parseVolume } from "../domain/volume.js";
+import { pieceWeight } from "../domain/piece-weights.js";
 import { addToCart, getCart, removeFromCart } from "../upstream/cart.js";
 import { findCheapest } from "../upstream/cheapest.js";
 import {
@@ -60,6 +61,8 @@ export interface PlannedLine {
   decision: SurplusDecision | null;
   /** Set when the stated category matched nothing and was ignored. */
   droppedCategory?: { requested: string; available: string[] };
+  /** Set when a count requirement was estimated into a weight to match loose goods. */
+  converted?: { fromCount: number; grams: number; gramsEach: number };
 }
 
 export interface BuiltPlan {
@@ -166,8 +169,20 @@ function decideAction(
   chosen: CoverageStrategy | null,
   previous: RecordedChoice | null,
   availableCategories: string[],
+  need: AggregatedNeed,
+  needsWeight: boolean,
 ): PlanAction {
   if (!chosen) {
+    // A count need with no known piece weight: the fix is a weight, not a
+    // different search term. Say exactly that.
+    if (needsWeight) {
+      return {
+        kind: "blocked",
+        reason:
+          `"${need.label}" anges i styck men säljs i lösvikt. Ange mängden i ` +
+          `vikt (t.ex. gram) — jag känner ingen styckvikt för "${need.query}".`,
+      };
+    }
     // Name the facets that do exist. "No product covers this" on its own sends
     // the caller looking for a stock problem instead of a wrong search term.
     const hint =
@@ -215,6 +230,53 @@ function decideAction(
   return { kind: "none", reason: "redan rätt produkt och antal" };
 }
 
+interface Covered {
+  coverage: CoverageResult;
+  /** Set when a count need was estimated into a weight to match loose goods. */
+  converted?: { fromCount: number; grams: number; gramsEach: number };
+  /** True when nothing matched because the need is in pieces and no weight is known. */
+  needsWeight: boolean;
+}
+
+/**
+ * Cover a need, converting pieces to weight when that is the only way to match.
+ *
+ * Recipes count in pieces but Willys sells loose produce by weight, so a "2 st"
+ * requirement finds only measure-mismatched candidates. When a piece weight is
+ * known, the requirement is re-expressed in grams and matched again; when it is
+ * not, the caller is told a weight is needed rather than just "blocked".
+ */
+function coverNeed(need: AggregatedNeed, candidates: Candidate[]): Covered {
+  const coverage = planCoverage(
+    { amount: need.amount, measure: need.measure },
+    candidates,
+  );
+
+  if (coverage.best || need.measure !== "count") {
+    return { coverage, needsWeight: false };
+  }
+
+  // Nothing matched a count need. If the candidates are weight-sold and we know
+  // a per-piece weight, retry in grams.
+  const massRejected = coverage.rejected.some(
+    (r) => r.reason === "measure_mismatch",
+  );
+  if (!massRejected) return { coverage, needsWeight: false };
+
+  const gramsEach = pieceWeight(need.query);
+  if (gramsEach === null) return { coverage, needsWeight: true };
+
+  const grams = need.amount * gramsEach;
+  const massCoverage = planCoverage({ amount: grams, measure: "mass" }, candidates);
+  if (!massCoverage.best) return { coverage: massCoverage, needsWeight: false };
+
+  return {
+    coverage: massCoverage,
+    converted: { fromCount: need.amount, grams, gramsEach },
+    needsWeight: false,
+  };
+}
+
 /**
  * Compute the basket the ledger implies, without touching the cart.
  *
@@ -260,10 +322,8 @@ export async function buildPlan(
       continue;
     }
 
-    const coverage = planCoverage(
-      { amount: need.amount, measure: need.measure },
-      cands.data.candidates,
-    );
+    const covered = coverNeed(need, cands.data.candidates);
+    const coverage = covered.coverage;
 
     // Resolve the surplus trade-off if the caller has already answered it.
     let chosen = coverage.best;
@@ -288,11 +348,18 @@ export async function buildPlan(
       chosen,
       coverage,
       previous,
-      action: decideAction(chosen, previous, cands.data.availableCategories),
+      action: decideAction(
+        chosen,
+        previous,
+        cands.data.availableCategories,
+        need,
+        covered.needsWeight,
+      ),
       decision,
       ...(cands.data.droppedCategory
         ? { droppedCategory: cands.data.droppedCategory }
         : {}),
+      ...(covered.converted ? { converted: covered.converted } : {}),
     });
   }
 
