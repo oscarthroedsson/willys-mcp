@@ -78,6 +78,22 @@ export const Inputs = {
     })
     .strict(),
 
+  fetch_url: z
+    .object({
+      url: z
+        .string()
+        .url()
+        .describe("Sidan att hämta, t.ex. en recept-URL användaren gett dig."),
+      render: z
+        .boolean()
+        .default(false)
+        .describe(
+          "Tvinga en renderad webbläsare direkt. Utelämna normalt — verktyget " +
+            "eskalerar själv när en vanlig hämtning ger för tunt innehåll.",
+        ),
+    })
+    .strict(),
+
   setup: z.object({}).strict(),
 
   setup_init: z
@@ -513,6 +529,17 @@ export const TOOLS = [
       ".env åt dem vid uppsättning — sökvägen står i svaret från willys_setup. " +
       "En chattklient gör inte filsökvägar klickbara. Läser inte innehållet.",
     schema: Inputs.open_file,
+  },
+  {
+    name: TOOL.fetchUrl,
+    description:
+      "Hämta en webbsida från ANVÄNDARENS dator och få tillbaka strukturerad " +
+      "data (JSON-LD, t.ex. schema.org Recipe) plus ren text. Kör detta FÖRST " +
+      "när du behöver läsa en URL — det går via användarens hem-IP och tar sig " +
+      "förbi block som din egen hämtning fastnar på, och det är billigare. " +
+      "Faller din egen webbläsning tillbaka bara om detta misslyckas. Renderar " +
+      "JS-sidor automatiskt vid behov.",
+    schema: Inputs.fetch_url,
   },
   {
     name: TOOL.setup,

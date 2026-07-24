@@ -9,6 +9,7 @@
 export const TOOL = {
   readDoc: "willys_read_doc",
   openFile: "willys_open_file",
+  fetchUrl: "willys_fetch_url",
   setup: "willys_setup",
   setupInit: "willys_setup_init",
   login: "willys_login",

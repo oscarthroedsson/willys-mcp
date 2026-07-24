@@ -6,6 +6,10 @@ det handlar om recept — då tappas aggregeringen.
 
 ## Flödet
 
+0. `willys_fetch_url` — ger användaren dig recept som länkar, hämta var och en
+   här först. Svaret ger schema.org Recipe (fältet `strukturerad_data`) med
+   ingredienser och portionsantal, eller ren text att läsa dem ur. Räkna om
+   till de portioner användaren vill laga innan nästa steg.
 1. `willys_plan_add_recipe` — ett anrop per recept, med dess ingredienser
 2. `willys_plan_status` — visa föreslagen korg, kostnad och beslutslägen
 3. `willys_plan_apply` — `dryRun=true` först, sedan false efter godkännande

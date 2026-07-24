@@ -43,6 +43,7 @@ import {
   PASSWORD_HELP,
 } from "./setup.js";
 import { readDoc } from "./docs.js";
+import { fetchUrl } from "./net/fetch-url.js";
 import * as api from "./upstream/index.js";
 import { findCheapest } from "./upstream/cheapest.js";
 import * as stores from "./upstream/stores.js";
@@ -136,6 +137,22 @@ async function dispatch(
       const a = args as z.infer<typeof Inputs.read_doc>;
       const r = readDoc(a.path);
       return respond(r, (doc) => doc);
+    }
+
+    case TOOL.fetchUrl: {
+      const a = args as z.infer<typeof Inputs.fetch_url>;
+      const r = await fetchUrl(a.url, { render: a.render });
+      return respond(r, (page) =>
+        compact({
+          url: page.finalUrl,
+          status: page.status,
+          metod: page.method,
+          titel: page.title,
+          ...(page.jsonLd.length > 0 ? { strukturerad_data: page.jsonLd } : {}),
+          text: page.text,
+          ...(page.truncated ? { text_avkortad: true } : {}),
+        }),
+      );
     }
 
     case TOOL.openFile: {

@@ -42,6 +42,15 @@ utom butiksuppslagen (willys_find_stores m.fl., som läser ett publikt register)
 Sessioner lever 24h och återanvänds; sätt force=true bara om en session bevisligen
 är död. Vid AUTH_EXPIRED: logga in igen och gör om anropet.
 
+## Läsa en webbsida eller ett recept
+
+Behöver du läsa en URL användaren gett dig — ett recept, en artikel — kör
+willys_fetch_url FÖRST, innan din egen webbläsning. Det går via användarens
+dator och hem-IP och tar sig förbi block som din egen hämtning fastnar på, och
+det är billigare. Svaret ger strukturerad data (schema.org Recipe under
+strukturerad_data när sidan har det) plus ren text. Faller tillbaka till din
+egen hämtning bara om detta misslyckas.
+
 ## Välj rätt sökverktyg — vanligaste felet
 
 willys_find_cheapest för pris, "billigast", budget eller mängd. Den rankar på
