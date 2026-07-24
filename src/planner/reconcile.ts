@@ -9,6 +9,7 @@ import {
 import type { Product } from "../domain/product.js";
 import { parseVolume } from "../domain/volume.js";
 import { pieceWeight } from "../domain/piece-weights.js";
+import { matchesQuery } from "../domain/name-match.js";
 import { addToCart, getCart, removeFromCart } from "../upstream/cart.js";
 import { findCheapest } from "../upstream/cheapest.js";
 import {
@@ -63,6 +64,13 @@ export interface PlannedLine {
   droppedCategory?: { requested: string; available: string[] };
   /** Set when a count requirement was estimated into a weight to match loose goods. */
   converted?: { fromCount: number; grams: number; gramsEach: number };
+  /**
+   * True when the chosen product's name does not plausibly answer the query —
+   * "potatis" resolving to "Lök Gul", "falukorv" to a chicken sausage. The
+   * cheapest match can be the wrong thing entirely; this is the signal to ask
+   * before buying it. Never blocks — it flags.
+   */
+  uncertainMatch: boolean;
 }
 
 export interface BuiltPlan {
@@ -88,6 +96,11 @@ export interface BuildOptions {
    * "no, don't buy 11 spare eggs".
    */
   preferTight?: string[] | undefined;
+  /**
+   * Ingredient keys where the caller has confirmed an uncertain match is
+   * actually right. Those lines stop being held back by applyPlan.
+   */
+  acceptMatch?: string[] | undefined;
   /** How many candidate products to consider per ingredient. */
   candidateLimit?: number | undefined;
 }
@@ -121,6 +134,7 @@ async function candidatesFor(
     excludeBrands: [],
     onlyBuyable: true,
     mustContain: need.mustContain,
+    mustNotContain: need.mustNotContain,
     limit,
   };
 
@@ -317,6 +331,7 @@ export async function buildPlan(
         previous,
         action: { kind: "blocked", reason: `sökning misslyckades: ${cands.kind}` },
         decision: null,
+        uncertainMatch: false,
       });
       unresolved++;
       continue;
@@ -343,6 +358,11 @@ export async function buildPlan(
     if (chosen) totalCost += chosen.totalCost;
     else unresolved++;
 
+    // Does the chosen product actually answer the query? A cheapest-first
+    // match can be the wrong thing entirely.
+    const uncertainMatch =
+      chosen !== null && !matchesQuery(chosen.name, need.query);
+
     lines.push({
       need,
       chosen,
@@ -356,6 +376,7 @@ export async function buildPlan(
         covered.needsWeight,
       ),
       decision,
+      uncertainMatch,
       ...(cands.data.droppedCategory
         ? { droppedCategory: cands.data.droppedCategory }
         : {}),
@@ -404,8 +425,10 @@ export async function applyPlan(
   cookies: string,
   plan: BuiltPlan,
   dryRun: boolean,
+  acceptMatch: string[] = [],
 ): Promise<Result<ApplyResult>> {
   const before = await getCart(cookies);
+  const accepted = new Set(acceptMatch);
   const changes: AppliedChange[] = [];
   let skipped = 0;
   let failed = 0;
@@ -419,6 +442,19 @@ export async function applyPlan(
         label,
         action: "none",
         detail: "väntar på svar om överskott",
+        ok: true,
+      });
+      continue;
+    }
+
+    // An uncertain match is held back until confirmed — potatis→lök must not
+    // slip into the cart just because the price and quantity looked fine.
+    if (line.uncertainMatch && !accepted.has(line.need.key)) {
+      skipped++;
+      changes.push({
+        label,
+        action: "none",
+        detail: `osäker matchning (${line.chosen?.name ?? "?"}) — bekräfta via acceptMatch: ["${line.need.key}"]`,
         ok: true,
       });
       continue;

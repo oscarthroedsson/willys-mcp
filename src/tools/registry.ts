@@ -265,8 +265,18 @@ export const Inputs = {
         .max(5)
         .default([])
         .describe(
-          'Produktnamnet måste innehålla dessa ord. Skydd mot att billigaste ' +
-          'träffen delar ett ord men inget annat — "torkad dragon" matchade hundtugg.',
+          'Produktnamnet måste innehålla dessa ord (ordgräns/suffix, inte ' +
+          'delsträng — "smör" matchar inte "Smörgåsmargarin"). Skydd mot att ' +
+          'billigaste träffen delar ett ord men inget annat.',
+        ),
+      mustNotContain: z
+        .array(z.string().min(1).max(40))
+        .max(10)
+        .default([])
+        .describe(
+          'Uteslut produkter vars namn innehåller något av dessa ord, t.ex. ' +
+          '["margarin","picklad","sås","juice"]. Tar bort nära-missar som delar ' +
+          'huvudordet men är fel vara.',
         ),
       need: z
         .string()
@@ -336,8 +346,16 @@ export const Inputs = {
                 .max(5)
                 .default([])
                 .describe(
-                  "Ord produktnamnet måste innehålla. Sätt detta när söktermen " +
-                    "riskerar att matcha fel vara.",
+                  "Ord produktnamnet måste innehålla (ordgräns/suffix). Sätt " +
+                    "detta när söktermen riskerar att matcha fel vara.",
+                ),
+              mustNotContain: z
+                .array(z.string().min(1).max(40))
+                .max(10)
+                .default([])
+                .describe(
+                  'Uteslut namn som innehåller dessa ord, t.ex. ["margarin",' +
+                    '"picklad","sås"]. Tar bort nära-missar.',
                 ),
             })
             .strict(),
@@ -369,6 +387,8 @@ export const Inputs = {
     })
     .strict(),
 
+  // acceptMatch is defined on plan_apply below; status is read-only.
+
   plan_apply: z
     .object({
       sessionId,
@@ -387,6 +407,15 @@ export const Inputs = {
       preferTight: surplusKeys(
         "Nycklar där användaren avböjt överskott.",
       ),
+      acceptMatch: z
+        .array(z.string().min(1).max(60))
+        .max(60)
+        .default([])
+        .describe(
+          "Ingrediensnycklar där en osäker matchning (osaker_matchning i " +
+            "plan_status) bekräftats som rätt. Utan detta hålls osäkra rader " +
+            "tillbaka och läggs inte i vagnen.",
+        ),
     })
     .strict(),
 

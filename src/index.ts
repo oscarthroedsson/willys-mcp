@@ -440,6 +440,7 @@ async function dispatch(
         excludeBrands: a.excludeBrands,
         onlyBuyable: a.onlyBuyable,
         mustContain: a.mustContain,
+        mustNotContain: a.mustNotContain,
         need: a.need,
         limit: a.limit,
       });
@@ -545,7 +546,7 @@ async function dispatch(
       });
       if (!built.ok) return respond(built, renderPlan);
 
-      const applied = await applyPlan(c, built.data, a.dryRun);
+      const applied = await applyPlan(c, built.data, a.dryRun, a.acceptMatch);
       return respond(applied, (d) =>
         compact({
           plan: a.plan,
@@ -631,6 +632,14 @@ function renderPlan(d: BuiltPlan): string {
           }
         : { forslag: null }),
       atgard: describeAction(l.action),
+      ...(l.uncertainMatch && l.chosen
+        ? {
+            osaker_matchning:
+              `"${l.need.query}" gav "${l.chosen.name}" — ser fel ut. Kontrollera, ` +
+              `smalna av med mustContain/mustNotContain, eller bekräfta med ` +
+              `acceptMatch: ["${l.need.key}"]. Osäkra rader läggs inte i vagnen förrän de bekräftats.`,
+          }
+        : {}),
       ...(l.decision ? { beslut_kravs: l.decision.question } : {}),
       ...(l.converted
         ? {

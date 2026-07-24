@@ -29,6 +29,7 @@ export interface IngredientInput {
   category?: string | undefined;
   requireSwedishMeat?: boolean | undefined;
   mustContain?: string[] | undefined;
+  mustNotContain?: string[] | undefined;
 }
 
 export interface NeedSource {
@@ -45,6 +46,7 @@ export interface AggregatedNeed {
   category: string | null;
   requireSwedishMeat: boolean;
   mustContain: string[];
+  mustNotContain: string[];
   /** Summed, in the normalised unit for `measure`. */
   amount: number;
   measure: Measure;
@@ -85,6 +87,7 @@ interface ItemRow {
   raw_amount: string;
   require_swedish_meat: number;
   must_contain: string;
+  must_not_contain: string;
 }
 
 interface ChoiceRow {
@@ -116,6 +119,7 @@ function conn(): Database.Database {
       raw_amount           TEXT NOT NULL,
       require_swedish_meat INTEGER NOT NULL DEFAULT 0,
       must_contain         TEXT NOT NULL DEFAULT '[]',
+      must_not_contain     TEXT NOT NULL DEFAULT '[]',
       created_at           INTEGER NOT NULL,
       PRIMARY KEY (plan_id, recipe, key)
     );
@@ -132,6 +136,18 @@ function conn(): Database.Database {
       PRIMARY KEY (plan_id, key)
     );
   `);
+
+  // Migrate databases created before must_not_contain existed. ADD COLUMN is
+  // cheap and the guard keeps it idempotent.
+  const cols = db
+    .prepare("PRAGMA table_info(plan_items)")
+    .all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "must_not_contain")) {
+    db.exec(
+      "ALTER TABLE plan_items ADD COLUMN must_not_contain TEXT NOT NULL DEFAULT '[]'",
+    );
+  }
+
   return db;
 }
 
@@ -185,6 +201,7 @@ export function addRecipe(
       raw_amount: ing.amount,
       require_swedish_meat: ing.requireSwedishMeat ? 1 : 0,
       must_contain: JSON.stringify(ing.mustContain ?? []),
+      must_not_contain: JSON.stringify(ing.mustNotContain ?? []),
     });
   }
 
@@ -196,10 +213,10 @@ export function addRecipe(
     const insert = c.prepare(`
       INSERT INTO plan_items
         (plan_id, recipe, key, label, query, category, amount, measure,
-         raw_amount, require_swedish_meat, must_contain, created_at)
+         raw_amount, require_swedish_meat, must_contain, must_not_contain, created_at)
       VALUES
         (@plan_id, @recipe, @key, @label, @query, @category, @amount, @measure,
-         @raw_amount, @require_swedish_meat, @must_contain, ${now})
+         @raw_amount, @require_swedish_meat, @must_contain, @must_not_contain, ${now})
     `);
     for (const r of items) insert.run(r);
   });
@@ -278,6 +295,11 @@ export function listNeeds(planId: string): {
         group.flatMap((g) => JSON.parse(g.must_contain) as string[]),
       ),
     ];
+    const mustNotContain = [
+      ...new Set(
+        group.flatMap((g) => JSON.parse(g.must_not_contain ?? "[]") as string[]),
+      ),
+    ];
 
     needs.push({
       key,
@@ -286,6 +308,7 @@ export function listNeeds(planId: string): {
       category: group.find((g) => g.category)?.category ?? null,
       requireSwedishMeat,
       mustContain,
+      mustNotContain,
       amount: group.reduce((s, g) => s + g.amount, 0),
       measure: first.measure as Measure,
       sources: group.map((g) => ({

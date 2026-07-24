@@ -8,6 +8,7 @@ import {
   parseVolume,
   type PackageMath,
 } from "../domain/volume.js";
+import { nameContainsTerm, nameHasSubstring } from "../domain/name-match.js";
 import { UpstreamSearch } from "./schemas.js";
 
 /**
@@ -51,6 +52,14 @@ export interface CheapestOptions {
    * error where the match shares a word and nothing else.
    */
   mustContain?: string[] | undefined;
+  /**
+   * Reject products whose name contains any of these (substring).
+   *
+   * The complement of mustContain: mustNotContain ["margarin","picklad","sås"]
+   * removes the near-misses that share the head noun — picklad rödlök when you
+   * want fresh, margarin when you want butter.
+   */
+  mustNotContain?: string[] | undefined;
   /** Requirement text such as "1.7 kg" — enables package maths. */
   need?: string | undefined;
   limit: number;
@@ -80,6 +89,7 @@ export interface CheapestResult {
     notBuyable: number;
     noPrice: number;
     irrelevantName: number;
+    excludedWord: number;
   };
   products: RankedProduct[];
   /** Set when the cheapest per-unit option is not the cheapest way to cover `need`. */
@@ -137,9 +147,11 @@ export async function findCheapest(
     notBuyable: 0,
     noPrice: 0,
     irrelevantName: 0,
+    excludedWord: 0,
   };
 
-  const required = (opts.mustContain ?? []).map((w) => w.toLowerCase());
+  const required = opts.mustContain ?? [];
+  const forbidden = opts.mustNotContain ?? [];
 
   const kept: Product[] = [];
   for (const raw of rows) {
@@ -165,12 +177,14 @@ export async function findCheapest(
       filteredOut.noPrice++;
       continue;
     }
-    if (required.length > 0) {
-      const name = p.name.toLowerCase();
-      if (!required.every((w) => name.includes(w))) {
-        filteredOut.irrelevantName++;
-        continue;
-      }
+    // Word/suffix match, not substring: "smör" must not pass "Smörgåsmargarin".
+    if (required.length > 0 && !required.every((w) => nameContainsTerm(p.name, w))) {
+      filteredOut.irrelevantName++;
+      continue;
+    }
+    if (forbidden.length > 0 && forbidden.some((w) => nameHasSubstring(p.name, w))) {
+      filteredOut.excludedWord++;
+      continue;
     }
     kept.push(p);
   }
