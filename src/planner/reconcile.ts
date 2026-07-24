@@ -125,7 +125,9 @@ async function candidatesFor(
     products.map((p) => ({
       code: p.code,
       name: p.name,
-      price: p.price,
+      // packagePrice, not price: for loose goods `price` is kr/kg, not what
+      // one package costs. Coverage maths must see the real package cost.
+      price: p.packagePrice,
       pack: parseVolume(p.unit),
       brand: p.brand,
     }));

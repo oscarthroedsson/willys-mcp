@@ -18,6 +18,10 @@ export const UpstreamProduct = z
     priceValue: z.number().nullish(),
     comparePrice: z.string().nullish(),
     comparePriceUnit: z.string().nullish(),
+    // "kr/kg" | "kr/l" | "kr/st" — tells whether priceValue is per kilo/litre
+    // (loose _KG goods) or the price of one package. Without it, a 39.90 kr/kg
+    // paprika reads as a 39.90 kr piece.
+    priceUnit: z.string().nullish(),
     displayVolume: z.string().nullish(),
     manufacturer: z.string().nullish(),
     labels: z.array(z.string()).nullish(),

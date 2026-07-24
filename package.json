@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "smoke": "tsx tests/smoke.ts",
     "test:volume": "tsx tests/volume.test.ts",
+    "test:product": "tsx tests/product.test.ts",
     "test:coverage": "tsx tests/coverage.test.ts",
     "test:planner": "tsx tests/planner.test.ts",
     "test:category": "tsx tests/category.test.ts",
