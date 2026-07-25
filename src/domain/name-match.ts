@@ -41,6 +41,48 @@ export function nameHasSubstring(name: string, term: string): boolean {
  * cheapest match is the wrong thing entirely, so the caller can flag it instead
  * of shipping two kilos of onions labelled as potatoes.
  */
+/**
+ * Attribute groups where a mismatch means the wrong product.
+ *
+ * The head-noun check passes "grön paprika" against "Paprika Gul" — the noun is
+ * right, the colour is wrong, and cheapest-first happily picks it. These groups
+ * make a differing attribute a hard signal: if the query names one value and the
+ * product names a DIFFERENT value from the same group, it is the wrong thing.
+ */
+const ATTRIBUTE_GROUPS: string[][] = [
+  ["grön", "gul", "röd", "orange", "vit", "svart", "brun", "lila"],
+  ["hel", "hackad", "riven", "skivad", "strimlad", "krossad", "mald", "malen"],
+  ["färsk", "fryst", "fryst", "torkad", "inlagd", "picklad", "rökt", "konserverad"],
+  [
+    "naturell", "osötad", "sötad", "smaksatt",
+    "citron", "lime", "apelsin", "hallon", "jordgubb", "passion", "ananas",
+    "mango", "päron", "äpple", "kokos", "vanilj", "choklad", "mynta",
+  ],
+];
+
+/**
+ * Does the product name carry an attribute that contradicts the query?
+ *
+ * True when the query names a value from an attribute group and the product
+ * names a different value from that same group — "grön" vs "gul", "naturell" vs
+ * "passion". Independent of price and of surplus settings, so the cheapest
+ * route cannot launder a wrong colour or flavour past review.
+ */
+export function attributeConflict(name: string, query: string): boolean {
+  const q = new Set(words(query));
+  const n = new Set(words(name));
+  for (const group of ATTRIBUTE_GROUPS) {
+    const wanted = group.filter((a) => q.has(a));
+    if (wanted.length === 0) continue;
+    const present = group.filter((a) => n.has(a));
+    // The product states a value from this group, and none of them is wanted.
+    if (present.length > 0 && !present.some((a) => wanted.includes(a))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function matchesQuery(name: string, query: string): boolean {
   const qWords = words(query);
   if (qWords.length === 0) return true; // no query to judge against

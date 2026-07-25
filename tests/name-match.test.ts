@@ -2,6 +2,7 @@ import {
   nameContainsTerm,
   nameHasSubstring,
   matchesQuery,
+  attributeConflict,
 } from "../src/domain/name-match.js";
 
 /** Word/suffix matching, no network. Cases drawn from the live friction report. */
@@ -35,5 +36,14 @@ check("tomat vs Vita Bönor i Tomatsås -> false", matchesQuery("Vita Bönor i T
 check("gul lök vs Lök Gul -> true", matchesQuery("Lök Gul Klass 1", "gul lök"), true);
 check("vispgrädde vs Visp 31% -> true (abbrev)", matchesQuery("Visp 31%", "vispgrädde"), true);
 check("potatis vs Potatis Fast -> true", matchesQuery("Potatis Fast Klass 1", "potatis"), true);
+
+console.log("\n=== attributeConflict (5.2/5.3: fel attribut) ===");
+check("grön paprika vs Paprika Gul -> konflikt", attributeConflict("Paprika Gul Klass 1", "grön paprika"), true);
+check("grön paprika vs Paprika Grön -> ok", attributeConflict("Paprika Grön Klass 1", "grön paprika"), false);
+check("naturell vatten vs Passion/ananas -> konflikt", attributeConflict("Passion/ananas Kolsyrat Vatten", "kolsyrat vatten naturell"), true);
+check("rödlök vs Rödlök -> ok (samma färg)", attributeConflict("Picklad Rödlök", "rödlök"), false);
+check("riven ost vs Ost Bit (ingen form-attr) -> ok", attributeConflict("Gouda Ost Bit", "riven ost"), false);
+check("hackad vs Hel -> konflikt", attributeConflict("Vitlök Hel", "hackad vitlök"), true);
+check("smör (inget attr) vs Smör -> ok", attributeConflict("Smör Normalsaltat", "smör"), false);
 
 console.log(process.exitCode ? "\nRÖD" : "\nGRÖN");

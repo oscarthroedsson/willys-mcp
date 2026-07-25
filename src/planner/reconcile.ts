@@ -1,4 +1,4 @@
-import { ok, type Result } from "../core/result.js";
+import { err, ok, type Result } from "../core/result.js";
 import {
   planCoverage,
   type Candidate,
@@ -9,7 +9,8 @@ import {
 import type { Product } from "../domain/product.js";
 import { parseVolume } from "../domain/volume.js";
 import { pieceWeight } from "../domain/piece-weights.js";
-import { matchesQuery } from "../domain/name-match.js";
+import { matchesQuery, attributeConflict } from "../domain/name-match.js";
+import { verifySession } from "../auth/login.js";
 import { addToCart, getCart, removeFromCart } from "../upstream/cart.js";
 import { findCheapest } from "../upstream/cheapest.js";
 import {
@@ -381,9 +382,12 @@ export async function buildPlan(
     else unresolved++;
 
     // Does the chosen product actually answer the query? A cheapest-first
-    // match can be the wrong thing entirely.
+    // match can be the wrong noun (potatis -> lök) or the wrong attribute
+    // (grön -> gul paprika). Both flag, independent of any surplus setting.
     const uncertainMatch =
-      chosen !== null && !matchesQuery(chosen.name, need.query);
+      chosen !== null &&
+      (!matchesQuery(chosen.name, need.query) ||
+        attributeConflict(chosen.name, need.query));
 
     lines.push({
       need,
@@ -449,14 +453,42 @@ export async function applyPlan(
   dryRun: boolean,
   acceptMatch: string[] = [],
 ): Promise<Result<ApplyResult>> {
+  // Preflight: confirm the session is live before writing anything. A session
+  // can pass at dry-run and be dead 30 seconds later at apply; without this the
+  // old code fired 30 writes into 30 identical 401s and could half-fill a cart.
+  if (!dryRun) {
+    const alive = await verifySession(cookies);
+    if (!alive.ok) {
+      return err(
+        "AUTH_EXPIRED",
+        "Sessionen är inte längre giltig. Kör willys_login (force=true) och kör " +
+          "om — inget skrevs till kundvagnen.",
+      );
+    }
+  }
+
   const before = await getCart(cookies);
   const accepted = new Set(acceptMatch);
   const changes: AppliedChange[] = [];
   let skipped = 0;
   let failed = 0;
+  let aborted = false;
 
   for (const line of plan.lines) {
     const label = line.need.label;
+
+    // Session died mid-batch: stop rather than pile up more 401s. What was
+    // already written stays; re-running after re-login only sends the diff.
+    if (aborted) {
+      skipped++;
+      changes.push({
+        label,
+        action: "none",
+        detail: "avbruten — sessionen dog under körningen",
+        ok: false,
+      });
+      continue;
+    }
 
     if (line.decision) {
       skipped++;
@@ -511,6 +543,9 @@ export async function applyPlan(
     const applied = await runAction(cookies, a);
     if (!applied.ok) {
       failed++;
+      // A 401 mid-batch means the session died — abort the rest instead of
+      // firing the same failure at every remaining line.
+      if (applied.kind === "AUTH_EXPIRED") aborted = true;
       changes.push({
         label,
         action: a.kind,
