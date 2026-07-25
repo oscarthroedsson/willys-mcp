@@ -26,7 +26,9 @@ import {
   addRecipe,
   clearPlan,
   listRecipes,
+  removeIngredient,
   removeRecipe,
+  setIngredient,
 } from "./planner/ledger.js";
 import {
   applyPlan,
@@ -519,6 +521,45 @@ async function dispatch(
           borttaget_recept: a.recipe,
           borttagna_rader: removed,
           recept_kvar: listRecipes(a.plan),
+        }),
+      );
+    }
+
+    case TOOL.planSetIngredient: {
+      const a = args as z.infer<typeof Inputs.plan_set_ingredient>;
+      if (!listRecipes(a.plan).includes(a.recipe)) {
+        return failure(
+          `Inget recept "${a.recipe}" i planen ${a.plan}. ` +
+            `Finns: ${listRecipes(a.plan).join(", ") || "(inga)"}. ` +
+            `Skapa det med willys_plan_add_recipe först.`,
+        );
+      }
+      const r = setIngredient(a.plan, a.recipe, a.ingredient);
+      if (!r.ok) return failure(`Ogiltig ingrediens (INPUT) — ${r.reason}`);
+      return text(
+        compact({
+          plan: a.plan,
+          recept: a.recipe,
+          uppdaterad_ingrediens: r.key,
+          nasta_steg: "Kör willys_plan_status för att se effekten på korgen.",
+        }),
+      );
+    }
+
+    case TOOL.planRemoveIngredient: {
+      const a = args as z.infer<typeof Inputs.plan_remove_ingredient>;
+      const removed = removeIngredient(a.plan, a.recipe, a.query);
+      if (!removed) {
+        return failure(
+          `Ingen ingrediens "${a.query}" i receptet "${a.recipe}" (plan ${a.plan}).`,
+        );
+      }
+      return text(
+        compact({
+          plan: a.plan,
+          recept: a.recipe,
+          borttagen_ingrediens: a.query,
+          nasta_steg: "Kör willys_plan_status för att se effekten.",
         }),
       );
     }

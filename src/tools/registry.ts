@@ -40,6 +40,63 @@ const planId = z
       "namn för en separat inköpsomgång.",
   );
 
+/** One ingredient line — shared by plan_add_recipe and plan_set_ingredient. */
+const ingredient = z
+  .object({
+    query: z
+      .string()
+      .min(1)
+      .max(60)
+      .describe(
+        "Sökterm för varan, t.ex. \"ägg\" eller \"vispgrädde\". Detta är också " +
+          "nyckeln behov slås ihop på — skriv samma term för samma vara i olika " +
+          "recept, annars aggregeras de inte.",
+      ),
+    amount: z
+      .string()
+      .min(1)
+      .max(30)
+      .describe(
+        "Mängd med enhet: \"6 st\", \"400 g\", \"8 dl\", \"1 kg\". Ett tal utan " +
+          "enhet avvisas. Räkna om receptets mängd till portionerna du faktiskt " +
+          "lagar innan du skickar den.",
+      ),
+    label: z
+      .string()
+      .max(60)
+      .optional()
+      .describe("Läsbar etikett för utskrift. Default: query."),
+    category: z
+      .string()
+      .max(60)
+      .optional()
+      .describe(
+        "Kategorifacett från willys_find_cheapest, t.ex. \"Mejeri\". Kraftigt " +
+          "rekommenderad för varor vars namn är tvetydigt.",
+      ),
+    requireSwedishMeat: z
+      .boolean()
+      .default(false)
+      .describe("Kräv svensk köttmärkning. Använd för kött och fågel."),
+    mustContain: z
+      .array(z.string().min(1).max(40))
+      .max(5)
+      .default([])
+      .describe(
+        "Ord produktnamnet måste innehålla (ordgräns/suffix). Sätt detta när " +
+          "söktermen riskerar att matcha fel vara.",
+      ),
+    mustNotContain: z
+      .array(z.string().min(1).max(40))
+      .max(20)
+      .default([])
+      .describe(
+        'Uteslut namn som innehåller dessa ord (max 20), t.ex. ["margarin",' +
+          '"picklad","sås"]. Tar bort nära-missar.',
+      ),
+  })
+  .strict();
+
 /** Answers to surplus questions, keyed by ingredient. */
 function surplusKeys(description: string) {
   return z
@@ -302,66 +359,32 @@ export const Inputs = {
             "det tidigare bidraget i stället för att dubblera — använd det när " +
             "ett recept ska rättas.",
         ),
-      ingredients: z
-        .array(
-          z
-            .object({
-              query: z
-                .string()
-                .min(1)
-                .max(60)
-                .describe(
-                  "Sökterm för varan, t.ex. \"ägg\" eller \"vispgrädde\". Detta är " +
-                    "också nyckeln behov slås ihop på — skriv samma term för samma " +
-                    "vara i olika recept, annars aggregeras de inte.",
-                ),
-              amount: z
-                .string()
-                .min(1)
-                .max(30)
-                .describe(
-                  "Mängd med enhet: \"6 st\", \"400 g\", \"8 dl\", \"1 kg\". Ett tal " +
-                    "utan enhet avvisas. Räkna om receptets mängd till portionerna " +
-                    "du faktiskt lagar innan du skickar den.",
-                ),
-              label: z
-                .string()
-                .max(60)
-                .optional()
-                .describe("Läsbar etikett för utskrift. Default: query."),
-              category: z
-                .string()
-                .max(60)
-                .optional()
-                .describe(
-                  "Kategorifacett från willys_find_cheapest, t.ex. \"Mejeri\". " +
-                    "Kraftigt rekommenderad för varor vars namn är tvetydigt.",
-                ),
-              requireSwedishMeat: z
-                .boolean()
-                .default(false)
-                .describe("Kräv svensk köttmärkning. Använd för kött och fågel."),
-              mustContain: z
-                .array(z.string().min(1).max(40))
-                .max(5)
-                .default([])
-                .describe(
-                  "Ord produktnamnet måste innehålla (ordgräns/suffix). Sätt " +
-                    "detta när söktermen riskerar att matcha fel vara.",
-                ),
-              mustNotContain: z
-                .array(z.string().min(1).max(40))
-                .max(20)
-                .default([])
-                .describe(
-                  'Uteslut namn som innehåller dessa ord, t.ex. ["margarin",' +
-                    '"picklad","sås"]. Tar bort nära-missar.',
-                ),
-            })
-            .strict(),
-        )
+      ingredients: z.array(ingredient).min(1).max(60),
+    })
+    .strict(),
+
+  plan_set_ingredient: z
+    .object({
+      sessionId,
+      plan: planId,
+      recipe: z
+        .string()
         .min(1)
-        .max(60),
+        .max(80)
+        .describe("Receptet ingrediensen hör till (måste redan finnas i planen)."),
+      ingredient,
+    })
+    .strict(),
+
+  plan_remove_ingredient: z
+    .object({
+      plan: planId,
+      recipe: z.string().min(1).max(80),
+      query: z
+        .string()
+        .min(1)
+        .max(60)
+        .describe("Söktermen (nyckeln) för ingrediensen som ska tas bort."),
     })
     .strict(),
 
@@ -706,6 +729,21 @@ export const TOOLS = [
       "Ta bort ett recept ur planen. Behoven räknas om; varor som bara det receptet " +
       "krävde försvinner ur den föreslagna korgen.",
     schema: Inputs.plan_remove_recipe,
+  },
+  {
+    name: TOOL.planSetIngredient,
+    description:
+      "Lägg till eller rätta EN ingrediens i ett recept utan att röra de andra. " +
+      "Använd detta för att fixa en felmatchad rad (t.ex. skärpa mustContain) i " +
+      "stället för att skicka om hela receptet med willys_plan_add_recipe.",
+    schema: Inputs.plan_set_ingredient,
+  },
+  {
+    name: TOOL.planRemoveIngredient,
+    description:
+      "Ta bort EN ingrediens ur ett recept (t.ex. en skafferivara användaren " +
+      "redan har hemma), utan att röra receptets övriga rader.",
+    schema: Inputs.plan_remove_ingredient,
   },
   {
     name: TOOL.planStatus,

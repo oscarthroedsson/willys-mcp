@@ -35,6 +35,8 @@ export const TOOL = {
   // Meal planning: the cart as a projection of accumulated recipe needs.
   planAddRecipe: "willys_plan_add_recipe",
   planRemoveRecipe: "willys_plan_remove_recipe",
+  planSetIngredient: "willys_plan_set_ingredient",
+  planRemoveIngredient: "willys_plan_remove_ingredient",
   planStatus: "willys_plan_status",
   planApply: "willys_plan_apply",
   planClear: "willys_plan_clear",

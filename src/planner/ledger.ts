@@ -233,6 +233,68 @@ export function removeRecipe(planId: string, recipe: string): number {
   return r.changes;
 }
 
+/**
+ * Add or replace ONE ingredient in a recipe, leaving the rest untouched.
+ *
+ * Fixing a single mis-matched line used to mean resending the whole recipe —
+ * ten other ingredients re-rolled through ranking, the main reason a five-recipe
+ * plan took twelve add calls. This patches just the one row.
+ */
+export function setIngredient(
+  planId: string,
+  recipe: string,
+  ing: IngredientInput,
+): { ok: true; key: string } | { ok: false; reason: string } {
+  const parsed = parseRequirement(ing.amount);
+  if (!parsed) {
+    return {
+      ok: false,
+      reason: `kunde inte tolka mängden "${ing.amount}" (väntar t.ex. "400 g", "6 st", "8 dl")`,
+    };
+  }
+  const key = ingredientKey(ing.query);
+  conn()
+    .prepare(`
+      INSERT INTO plan_items
+        (plan_id, recipe, key, label, query, category, amount, measure,
+         raw_amount, require_swedish_meat, must_contain, must_not_contain, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(plan_id, recipe, key) DO UPDATE SET
+        label = excluded.label, query = excluded.query, category = excluded.category,
+        amount = excluded.amount, measure = excluded.measure,
+        raw_amount = excluded.raw_amount,
+        require_swedish_meat = excluded.require_swedish_meat,
+        must_contain = excluded.must_contain,
+        must_not_contain = excluded.must_not_contain
+    `)
+    .run(
+      planId, recipe, key,
+      ing.label?.trim() || ing.query.trim(),
+      ing.query.trim(),
+      ing.category?.trim() || null,
+      parsed.amount, parsed.measure, ing.amount,
+      ing.requireSwedishMeat ? 1 : 0,
+      JSON.stringify(ing.mustContain ?? []),
+      JSON.stringify(ing.mustNotContain ?? []),
+      Date.now(),
+    );
+  return { ok: true, key };
+}
+
+/** Remove ONE ingredient from a recipe. Returns whether a row was deleted. */
+export function removeIngredient(
+  planId: string,
+  recipe: string,
+  query: string,
+): boolean {
+  const r = conn()
+    .prepare(
+      "DELETE FROM plan_items WHERE plan_id = ? AND recipe = ? AND key = ?",
+    )
+    .run(planId, recipe, ingredientKey(query));
+  return r.changes > 0;
+}
+
 export function listRecipes(planId: string): string[] {
   const rows = conn()
     .prepare(
