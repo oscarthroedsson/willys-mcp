@@ -36,14 +36,23 @@ den är det modellen agerar på.
 **En fil per uppströmsresurs.** `src/upstream/` har en modul per resurs och en
 barrel i `index.ts`. Lägg inte tillbaka blandade ansvar i en gemensam klientfil.
 
-**Verktygsnamn deklareras en gång**, i `constants/tools.ts`. Manifestet och
-dispatch-switchen härleds båda därifrån, och `default`-grenen i switchen tilldelar
-`never` — lägger du till ett verktyg utan att hantera det så kompilerar det inte.
-Ta inte bort den raden.
+**Ett verktyg = ett objekt = en fil.** Varje verktyg definieras med `defineTool`
+i en gruppfil under `src/tools/` (`session.ts`, `search-tools.ts`,
+`planner-tools.ts` …) och samlar namn, schema, beskrivning och handler — inklusive
+sin egen svarsformning. Lägg till ett verktyg genom att lägga det i rätt
+gruppfil; splittra det INTE över namnkonstant + schemaregister + dispatch igen.
+Namnet deklareras fortfarande i `constants/tools.ts`, och en startup-vakt i
+`tools/registry.ts` kastar om ett deklarerat namn saknar handler.
+
+**Dispatchern äger boilerplaten.** `tools/registry.ts` slår upp verktyget,
+Zod-validerar, löser session→cookies en gång (verktyg med `needsAuth: true` får
+`ctx.cookies` — återimplementera aldrig AUTH_EXPIRED-grenen i en handler), och kör
+i en sista-utväg-try/catch. `index.ts` är bara transport + wiring, håll den tunn.
 
 **Zod-scheman är enforcement.** MCP-SDK:n validerar inte inkommande argument.
-Varje nytt verktyg måste ha ett `Inputs`-schema med `.strict()`, och numeriska
-fält som styr pengar eller anropsvolym måste ha ett tak.
+Varje nytt verktyg måste ha ett schema med `.strict()`, och numeriska fält som
+styr pengar eller anropsvolym måste ha ett tak. Delade fragment (sessionId,
+ingredient, planId) ligger i `tools/schema-parts.ts`.
 
 **Endpoints med build-hash är tidsinställda bomber.** Willys Next.js-rutter
 (`_next/data/{buildId}/...`) roterar vid varje deploy. Använd REST-rutterna under

@@ -185,15 +185,22 @@ Fullständig guide: **[INSTALL.md](INSTALL.md)**
 
 ```
 src/
-├── index.ts          MCP-entrypoint: transport, dispatch, felgränser
+├── index.ts          MCP-entrypoint: transport + wiring (tunn)
 ├── setup.ts          förstagångsdiagnostik
-├── tools/registry.ts Zod-kontrakt + verktygsmanifest (en sanningskälla)
+├── tools/            ett verktyg = ett objekt, grupperat per domän
+│   ├── registry.ts   samlar grupperna, äger dispatch (validering, auth, felgräns)
+│   ├── kit.ts        Tool-kontrakt, Ctx, defineTool, svarshjälpare
+│   ├── session.ts · search-tools.ts · cart-tools.ts · orders-tools.ts
+│   ├── stores-tools.ts · setup-tools.ts · planner-tools.ts
+│   ├── schema-parts.ts  delade Zod-fragment
+│   └── json-schema.ts   Zod → JSON Schema för manifestet
 ├── planner/
 │   ├── ledger.ts     behovsregister med härkomst per recept
 │   └── reconcile.ts  bygger korgen, diffar mot vagnen
-├── domain/           ren matte: volym, täckning, produktmodell
+├── domain/           ren matte: volym, täckning, produktmodell, namnmatchning
 ├── upstream/         HTTP-klienter mot Willys, en fil per resurs
 ├── auth/             Puppeteer-inloggning, sessionslagring
+├── net/              generisk URL-hämtare (fetch_url)
 ├── core/             http, result, logger, env
 └── constants/        endpoints, gränsvärden, instructions
 ```
