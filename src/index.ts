@@ -318,7 +318,8 @@ async function dispatch(
           rabatt: d.discount,
           varor: d.products.map((p) => ({
             ...pruneProduct(p),
-            antal: p.quantity,
+            // Unit-tagged so the model never reports "900 g" as "9×".
+            mangd: p.quantityDisplay,
           })),
         }),
       );

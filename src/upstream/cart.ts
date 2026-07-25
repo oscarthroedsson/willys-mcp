@@ -5,12 +5,21 @@ import { toProduct, type Product } from "../domain/product.js";
 import { parse } from "./parse.js";
 import { UpstreamCart } from "./schemas.js";
 
+export interface CartLine extends Product {
+  /** Raw quantity — packages for count goods, grams for loose _KG goods. */
+  quantity: number | null;
+  /** "st" or "g", so `quantity` is never read as the wrong unit. */
+  quantityUnit: "st" | "g";
+  /** Ready-to-show, e.g. "900 g" or "1 st" — never a bare ambiguous number. */
+  quantityDisplay: string;
+}
+
 export interface CartView {
   code: string | null;
   total: string | null;
   items: number;
   discount: string | null;
-  products: Array<Product & { quantity: number | null }>;
+  products: CartLine[];
 }
 
 /**
@@ -36,10 +45,23 @@ export async function getCart(cookies: string): Promise<Result<CartView>> {
     total: c.totalPrice ?? null,
     items: c.totalItems ?? 0,
     discount: c.totalDiscount ?? null,
-    products: (c.products ?? []).map((raw) => ({
-      ...toProduct(raw),
-      quantity: raw.quantity ?? null,
-    })),
+    products: (c.products ?? []).map((raw) => {
+      const product = toProduct(raw);
+      const quantity = raw.quantity ?? null;
+      // The code suffix is the sale unit: _KG is weighed (quantity is grams),
+      // everything else is counted (quantity is packages). Willys reuses one
+      // `quantity` field for both, which is what turned "900 g gurka" into
+      // "9× gurka" in a summary.
+      const weighed = product.code.endsWith("_KG");
+      const quantityUnit: "st" | "g" = weighed ? "g" : "st";
+      return {
+        ...product,
+        quantity,
+        quantityUnit,
+        quantityDisplay:
+          quantity === null ? "?" : `${quantity} ${quantityUnit}`,
+      };
+    }),
   });
 }
 
