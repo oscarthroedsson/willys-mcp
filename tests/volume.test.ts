@@ -30,4 +30,15 @@ console.log("\n=== mätslagskrock ska ge null ===");
 console.log("  behöver 5dl, paket 850g ->", packagesNeeded(parseRequirement("5 dl")!, parseVolume("ca: 850g")!));
 console.log("\n=== skräpindata ===");
 for (const junk of ["", "abc", "12", "kg", null]) console.log(`  ${JSON.stringify(junk)} ->`, parseVolume(junk as any));
+
+console.log("\n=== avrunnen vikt 650/350g -> 350g (drained) ===");
+{
+  const v = parseVolume("650/350g");
+  const ok = v?.amount === 350 && v?.measure === "mass";
+  console.log(`  650/350g -> ${JSON.stringify(v?.amount)} ${v?.measure} ${ok ? "ok" : "FEL"}`);
+  if (!ok) fail = 1;
+  const c = parseVolume("ca: 650/350g");
+  console.log(`  ca: 650/350g -> ${JSON.stringify(c?.amount)} approx=${c?.approximate}`);
+  if (c?.amount !== 350) fail = 1;
+}
 process.exit(fail ? 1 : 0);

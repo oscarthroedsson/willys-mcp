@@ -40,7 +40,12 @@ export function parseVolume(raw: string | null | undefined): ParsedVolume | null
 
   const text = raw.trim().toLowerCase();
   const approximate = text.startsWith("ca:") || text.startsWith("ca ");
-  const body = text.replace(/^ca[:\s]+/, "").trim();
+  let body = text.replace(/^ca[:\s]+/, "").trim();
+
+  // Drained-weight notation "650/350g" = gross/drained. The drained figure is
+  // what you cook with, so keep the part after the slash. Only when both sides
+  // are whole numbers, to avoid misreading a "1/2 dl" fraction as "2 dl".
+  body = body.replace(/^\d+\s*\/\s*(\d+\s*[a-zå])/, "$1");
 
   // Accept both decimal separators; they are used inconsistently upstream.
   const m = /^([0-9]+(?:[.,][0-9]+)?)\s*([a-zå]+)$/.exec(body);

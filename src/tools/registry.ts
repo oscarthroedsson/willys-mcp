@@ -271,12 +271,12 @@ export const Inputs = {
         ),
       mustNotContain: z
         .array(z.string().min(1).max(40))
-        .max(10)
+        .max(20)
         .default([])
         .describe(
-          'Uteslut produkter vars namn innehåller något av dessa ord, t.ex. ' +
-          '["margarin","picklad","sås","juice"]. Tar bort nära-missar som delar ' +
-          'huvudordet men är fel vara.',
+          'Uteslut produkter vars namn innehåller något av dessa ord (max 20), ' +
+          't.ex. ["margarin","picklad","sås","juice"]. Tar bort nära-missar som ' +
+          'delar huvudordet men är fel vara.',
         ),
       need: z
         .string()
@@ -351,7 +351,7 @@ export const Inputs = {
                 ),
               mustNotContain: z
                 .array(z.string().min(1).max(40))
-                .max(10)
+                .max(20)
                 .default([])
                 .describe(
                   'Uteslut namn som innehåller dessa ord, t.ex. ["margarin",' +
