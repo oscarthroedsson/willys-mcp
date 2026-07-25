@@ -105,7 +105,8 @@ function surplusKeys(description: string) {
     .default([])
     .describe(
       `${description} Nyckeln är ingrediensens sökterm i gemener, som den står i ` +
-        "fältet nyckel i svaret från willys_plan_status.",
+        'fältet nyckel i svaret från willys_plan_status. Skicka ["*"] för att ' +
+        "gälla alla rader — användbart när användaren sagt \"billigast\" generellt.",
     );
 }
 

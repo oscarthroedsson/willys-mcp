@@ -327,8 +327,15 @@ export async function buildPlan(
 ): Promise<Result<BuiltPlan>> {
   const { needs, conflicts } = listNeeds(planId);
   const previousChoices = listChoices(planId);
-  const accepted = new Set(opts.acceptSurplus ?? []);
-  const tight = new Set(opts.preferTight ?? []);
+  // "*" means "all" — the keys are search terms, and changing one to fix a
+  // match silently invalidated a prior per-key approval. The wildcard survives
+  // that. A helper keeps the intent readable.
+  const accSurplus = opts.acceptSurplus ?? [];
+  const accTight = opts.preferTight ?? [];
+  const acceptsSurplus = (key: string) =>
+    accSurplus.includes("*") || accSurplus.includes(key);
+  const prefersTight = (key: string) =>
+    accTight.includes("*") || accTight.includes(key);
   const limit = opts.candidateLimit ?? 12;
 
   const lines: PlannedLine[] = [];
@@ -367,10 +374,10 @@ export async function buildPlan(
     let chosen = coverage.best;
     let decision = coverage.decision;
     if (decision) {
-      if (tight.has(need.key)) {
+      if (prefersTight(need.key)) {
         chosen = decision.tightest;
         decision = null;
-      } else if (accepted.has(need.key)) {
+      } else if (acceptsSurplus(need.key)) {
         chosen = decision.cheapest;
         decision = null;
       } else {
@@ -468,7 +475,10 @@ export async function applyPlan(
   }
 
   const before = await getCart(cookies);
+  // No "*" here on purpose: a wrong-product match must be confirmed per line.
+  // Blanket-accepting uncertain matches is exactly what this gate prevents.
   const accepted = new Set(acceptMatch);
+  const acceptsMatch = (key: string) => accepted.has(key);
   const changes: AppliedChange[] = [];
   let skipped = 0;
   let failed = 0;
@@ -503,7 +513,7 @@ export async function applyPlan(
 
     // An uncertain match is held back until confirmed — potatis→lök must not
     // slip into the cart just because the price and quantity looked fine.
-    if (line.uncertainMatch && !accepted.has(line.need.key)) {
+    if (line.uncertainMatch && !acceptsMatch(line.need.key)) {
       skipped++;
       changes.push({
         label,
