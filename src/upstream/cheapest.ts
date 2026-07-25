@@ -8,7 +8,11 @@ import {
   parseVolume,
   type PackageMath,
 } from "../domain/volume.js";
-import { nameContainsTerm, nameHasSubstring } from "../domain/name-match.js";
+import {
+  looselyRelates,
+  nameContainsTerm,
+  nameHasSubstring,
+} from "../domain/name-match.js";
 import { UpstreamSearch } from "./schemas.js";
 
 /**
@@ -179,6 +183,16 @@ export async function findCheapest(
     }
     // Word/suffix match, not substring: "smör" must not pass "Smörgåsmargarin".
     if (required.length > 0 && !required.every((w) => nameContainsTerm(p.name, w))) {
+      filteredOut.irrelevantName++;
+      continue;
+    }
+    // No explicit mustContain: still drop products that share no word with the
+    // query at all — the "mineralvatten -> tampons" class of junk.
+    if (
+      required.length === 0 &&
+      opts.query.trim() !== "" &&
+      !looselyRelates(p.name, opts.query)
+    ) {
       filteredOut.irrelevantName++;
       continue;
     }

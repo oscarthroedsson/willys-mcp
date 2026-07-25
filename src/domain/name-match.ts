@@ -34,6 +34,25 @@ export function nameHasSubstring(name: string, term: string): boolean {
 }
 
 /**
+ * A loose relevance check for cheapest-first without an explicit mustContain.
+ *
+ * Willys search on "mineralvatten naturell" cheapest-first returned tampons and
+ * herbal tea — nothing shared a word, yet nothing filtered them. This keeps a
+ * product only when some substantial query word (≥4 chars) overlaps a product
+ * word either way, so "vatten" still matches "mineralvatten" and "Visp" still
+ * matches "vispgrädde", while unrelated junk is dropped. Short queries (no word
+ * ≥4) are not judged — the filter stays out of the way rather than over-cutting.
+ */
+export function looselyRelates(name: string, query: string): boolean {
+  const qWords = words(query).filter((w) => w.length >= 4);
+  if (qWords.length === 0) return true;
+  const nWords = words(name).filter((w) => w.length >= 4);
+  return qWords.some((q) =>
+    nWords.some((n) => n.includes(q) || q.includes(n)),
+  );
+}
+
+/**
  * Does the product plausibly answer the query?
  *
  * Uses the query's head noun (its last word) and asks whether the name equals

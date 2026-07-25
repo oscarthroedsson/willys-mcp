@@ -3,6 +3,7 @@ import {
   nameHasSubstring,
   matchesQuery,
   attributeConflict,
+  looselyRelates,
 } from "../src/domain/name-match.js";
 
 /** Word/suffix matching, no network. Cases drawn from the live friction report. */
@@ -45,5 +46,12 @@ check("rödlök vs Rödlök -> ok (samma färg)", attributeConflict("Picklad Rö
 check("riven ost vs Ost Bit (ingen form-attr) -> ok", attributeConflict("Gouda Ost Bit", "riven ost"), false);
 check("hackad vs Hel -> konflikt", attributeConflict("Vitlök Hel", "hackad vitlök"), true);
 check("smör (inget attr) vs Smör -> ok", attributeConflict("Smör Normalsaltat", "smör"), false);
+
+console.log("\n=== looselyRelates (5.8: relevansspärr) ===");
+check("vatten delar ord med mineralvatten", looselyRelates("Naturell Kolsyrat Vatten", "mineralvatten naturell"), true);
+check("tamponger delar inget -> false", looselyRelates("Mini Tamponger", "mineralvatten naturell"), false);
+check("örtte delar inget -> false", looselyRelates("Smooth Mint Örtte", "mineralvatten naturell"), false);
+check("Visp relaterar vispgrädde", looselyRelates("Visp 31%", "vispgrädde"), true);
+check("kort query (ägg) bedöms ej -> true", looselyRelates("Vad Som Helst", "ägg"), true);
 
 console.log(process.exitCode ? "\nRÖD" : "\nGRÖN");
