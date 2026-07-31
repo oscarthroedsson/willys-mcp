@@ -54,6 +54,17 @@ Varje nytt verktyg måste ha ett schema med `.strict()`, och numeriska fält som
 styr pengar eller anropsvolym måste ha ett tak. Delade fragment (sessionId,
 ingredient, planId) ligger i `tools/schema-parts.ts`.
 
+**Paketet är read-only, användarens state är någon annanstans.** `PACKAGE_ROOT`
+i `config.ts` pekar på det som följer med i npm-tarballen (`dist/`, `docs/`,
+`.env.example`) och får aldrig skrivas till — npm ersätter den katalogen vid
+varje uppdatering. `.env` och `willys.db` ligger under `STATE_DIR`: projektroten
+i en checkout (`src/` finns), annars `~/.willys-mcp`. Lägg inte tillbaka en
+skrivning mot `PACKAGE_ROOT`.
+
+**`files` i package.json är en vitlista, inte en bekvämlighet.** Den är det enda
+som håller `.env`, `willys.db` och sessionsdata utanför en publicerad tarball —
+npm exkluderar dem inte själv. Kör `npm pack --dry-run` efter en ändring där.
+
 **Endpoints med build-hash är tidsinställda bomber.** Willys Next.js-rutter
 (`_next/data/{buildId}/...`) roterar vid varje deploy. Använd REST-rutterna under
 `/axfood/rest/`. Döda endpoints raderas inte utan flyttas till `DEAD_ENDPOINTS`

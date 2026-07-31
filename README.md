@@ -155,14 +155,21 @@ npm install
 npm run build
 ```
 
-Koppla in i **Claude Desktop** eller **Claude Code**:
+Koppla in i **Claude Code**:
+
+```bash
+claude mcp add willys --env WILLYS_HOME=$HOME/.willys-mcp -- node /absolut/sökväg/willys-mcp/dist/index.js
+```
+
+…eller i **Claude Desktop**:
 
 ```json
 {
   "mcpServers": {
     "willys": {
       "command": "node",
-      "args": ["/absolut/sökväg/till/willys-mcp/dist/index.js"]
+      "args": ["/absolut/sökväg/till/willys-mcp/dist/index.js"],
+      "env": { "WILLYS_HOME": "/Users/dittnamn/.willys-mcp" }
     }
   }
 }
@@ -170,7 +177,11 @@ Koppla in i **Claude Desktop** eller **Claude Code**:
 
 Sen skriver du bara **"hjälp mig komma igång med Willys"** i en chatt. Claude
 frågar vilken ort du handlar i, slår upp din butik, skapar konfigurationsfilen
-och ger dig en klickbar länk. Det enda du gör själv är att fylla i två rader.
+och öppnar den åt dig. Det enda du gör själv är att fylla i två rader.
+
+`WILLYS_HOME` styr var `.env` och sessionsdatabasen hamnar. Utan den ligger de i
+projektmappen, vilket är bekvämt i en checkout men gör att de följer med om
+mappen någon gång byts ut.
 
 Fullständig guide: **[INSTALL.md](INSTALL.md)**
 

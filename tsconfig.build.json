@@ -5,7 +5,9 @@
     "outDir": "dist",
     "rootDir": "src",
     "declaration": false,
-    "sourceMap": true,
+    // No source maps: src/ is not part of the published package, so a map
+    // would only point at files the user does not have.
+    "sourceMap": false,
     // The dev config uses "bundler" resolution, which tsx handles but Node does
     // not. Emitting for plain `node` needs NodeNext — which works here only
     // because every relative import already carries an explicit .js extension.

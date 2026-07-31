@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { PROJECT_ROOT } from "../config.js";
+import { ENV_FILE } from "../config.js";
 import { log } from "./logger.js";
 
 /**
@@ -31,7 +31,7 @@ const fromFile = new Set<string>();
  * still wins the way it did before.
  */
 export function loadEnv(): void {
-  const file = process.env.WILLYS_ENV_FILE ?? path.join(PROJECT_ROOT, ".env");
+  const file = ENV_FILE();
 
   let mtimeMs: number;
   try {

@@ -3,13 +3,14 @@ import {
   chmodSync,
   constants,
   existsSync,
+  mkdirSync,
   readFileSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { DB_PATH, PROJECT_ROOT } from "./config.js";
+import { DB_PATH, ENV_FILE, ENV_TEMPLATE, STATE_DIR } from "./config.js";
 import { USERNAME_PATTERN } from "./constants/index.js";
 import { loadEnv } from "./core/env.js";
 
@@ -40,7 +41,8 @@ export interface SetupReport {
   ready: boolean;
   envFile: string;
   envExample: string;
-  projectRoot: string;
+  /** Where .env and the session database live on this machine. */
+  stateDir: string;
   checks: SetupCheck[];
   /** Ordered, copy-pasteable steps. Empty when ready. */
   steps: string[];
@@ -57,9 +59,6 @@ export interface SetupReport {
   };
 }
 
-const ENV_FILE = (): string =>
-  process.env.WILLYS_ENV_FILE ?? path.join(PROJECT_ROOT, ".env");
-
 function checkEnvFile(): SetupCheck {
   const file = ENV_FILE();
   if (!existsSync(file)) {
@@ -68,7 +67,7 @@ function checkEnvFile(): SetupCheck {
       label: ".env finns",
       status: "missing",
       detail: `ingen .env på ${file}`,
-      fix: `Kopiera ${path.join(PROJECT_ROOT, ".env.example")} till ${file} och fyll i den.`,
+      fix: `Kör willys_setup_init — den skapar ${file} åt användaren med rätt rättigheter.`,
     };
   }
 
@@ -232,7 +231,7 @@ function checkBrowser(): SetupCheck {
       status: "missing",
       detail: `ingen webbläsarcache på ${cacheRoot}`,
       fix:
-        "Kör `npx puppeteer browsers install chrome` i projektkatalogen. " +
+        "Kör `npx puppeteer browsers install chrome` i en terminal. " +
         "Inloggningen kräver en riktig webbläsare — Willys formulär går inte " +
         "att posta över vanlig HTTP.",
     };
@@ -269,9 +268,7 @@ export function inspectSetup(): SetupReport {
   if (blockers.length > 0) {
     const envFile = ENV_FILE();
     if (blockers.some((b) => b.id === "env_file")) {
-      steps.push(
-        `1. Kopiera ${path.join(PROJECT_ROOT, ".env.example")} till ${envFile}`,
-      );
+      steps.push(`1. Kör willys_setup_init — den skapar ${envFile}`);
     }
     if (blockers.some((b) => b.id === "username" || b.id === "password")) {
       steps.push(
@@ -303,8 +300,8 @@ export function inspectSetup(): SetupReport {
   return {
     ready: blockers.length === 0,
     envFile: ENV_FILE(),
-    envExample: path.join(PROJECT_ROOT, ".env.example"),
-    projectRoot: PROJECT_ROOT,
+    envExample: ENV_TEMPLATE,
+    stateDir: STATE_DIR,
     checks,
     steps,
     ...(passwordMissing
@@ -376,12 +373,14 @@ export function openInEditor(file: string): boolean {
  */
 export function initEnvFile(storeId?: string): InitResult {
   const file = ENV_FILE();
-  const template = path.join(PROJECT_ROOT, ".env.example");
 
   let created = false;
   if (!existsSync(file)) {
-    const seed = existsSync(template)
-      ? readFileSync(template, "utf8")
+    // The directory is normally created at import time; a custom
+    // WILLYS_ENV_FILE may point somewhere that does not exist yet.
+    mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    const seed = existsSync(ENV_TEMPLATE)
+      ? readFileSync(ENV_TEMPLATE, "utf8")
       : "WILLYS_USERNAME=\nWILLYS_PASSWORD=\nWILLYS_STORE_ID=\n";
     writeFileSync(file, seed, { mode: 0o600 });
     created = true;

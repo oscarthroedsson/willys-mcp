@@ -14,17 +14,30 @@ länge din dator är igång.
 - **Cirka 400 MB ledigt.** Inloggningen kräver en riktig webbläsare, så
   installationen laddar ner en egen Chromium.
 
-## Steg 1 — hämta och installera
+## Steg 1 — hämta och bygg
+
+Har du fått en `.bundle`-fil, packa upp den till ett riktigt projekt:
 
 ```bash
-cd /valfri/katalog
-# ...lägg projektmappen här...
+git clone ~/Downloads/willys-mcp.bundle willys-mcp
+```
+
+Sedan, i projektmappen:
+
+```bash
 cd willys-mcp
 npm install
 npm run build
 ```
 
-`npm install` tar några minuter, mest för webbläsaren.
+`npm install` tar några minuter, mest för webbläsaren. `npm run build` är inte
+valfritt — `dist/` följer inte med, den skapas här.
+
+Notera sökvägen till mappen, den behövs i steg 2:
+
+```bash
+pwd
+```
 
 ## Steg 2 — koppla in i din Claude
 
@@ -42,15 +55,21 @@ kan inte starta program på din dator.
   "mcpServers": {
     "willys": {
       "command": "node",
-      "args": ["/HELA/SÖKVÄGEN/till/willys-mcp/dist/index.js"]
+      "args": ["/HELA/SÖKVÄGEN/från/pwd/dist/index.js"],
+      "env": { "WILLYS_HOME": "/Users/DITTNAMN/.willys-mcp" }
     }
   }
 }
 ```
 
-Sökvägen måste vara absolut. Kör `pwd` i projektmappen för att få den.
+Sökvägen måste vara absolut. Hittar inte Claude Desktop `node` — appen startas
+inte från ett terminalfönster och ärver därför inte alltid din PATH — byt ut
+`"node"` mot den fullständiga sökvägen från `which node`.
 
-Filen ligger annars på:
+`WILLYS_HOME` är valfritt men rekommenderat: utan den hamnar dina uppgifter i
+projektmappen, och en framtida version som ersätter mappen tar dem med sig.
+
+Filen ligger på:
 - macOS `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows `%APPDATA%\Claude\claude_desktop_config.json`
 
@@ -59,8 +78,13 @@ Starta om Claude Desktop. Servern dyker upp under verktygsikonen.
 ### Claude Code
 
 ```bash
-claude mcp add willys -- node /HELA/SÖKVÄGEN/till/willys-mcp/dist/index.js
+claude mcp add willys --env WILLYS_HOME=$HOME/.willys-mcp -- node /HELA/SÖKVÄGEN/dist/index.js
 ```
+
+### Uppdatera senare
+
+Har du klonat: `git pull` i projektmappen, sedan `npm run build`. Fick du en ny
+`.bundle`-fil: `git pull ~/Downloads/willys-mcp.bundle` och bygg om.
 
 ## Steg 3 — låt Claude sätta upp resten
 
@@ -69,8 +93,8 @@ Du behöver **inte** redigera några filer själv först. Öppna en chatt och sk
 > Hjälp mig komma igång med Willys
 
 Claude kör uppsättningen, frågar vilken ort du handlar i, slår upp din butik och
-skapar konfigurationsfilen åt dig. Det enda du gör själv är att klicka på länken
-den ger dig och fylla i två rader:
+skapar konfigurationsfilen `.env` åt dig — och öppnar den, så du slipper leta
+efter en dold fil. Det enda du gör själv är att fylla i två rader:
 
 ```
 WILLYS_USERNAME=      # personnummer (10 eller 12 siffror) eller

@@ -2,6 +2,17 @@
   "name": "willys-mcp",
   "version": "1.0.0",
   "private": true,
+  "description": "MCP-server för Willys: sök, jämför pris, planera veckans recept och fyll kundvagnen från din egen dator.",
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "claude",
+    "willys",
+    "matplanering",
+    "dagligvaror"
+  ],
+  "author": "Oscar Throedsson",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -9,8 +20,15 @@
   "bin": {
     "willys-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "docs",
+    ".env.example",
+    "INSTALL.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run typecheck && npm run build",
     "start": "node dist/index.js",
     "mcp": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",

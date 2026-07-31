@@ -1,4 +1,6 @@
 import { fileURLToPath } from "node:url";
+import { existsSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 
 /**
@@ -7,19 +9,58 @@ import path from "node:path";
  */
 
 /**
- * Project root, anchored to THIS FILE — never to process.cwd().
+ * Where the shipped files live — docs/ and .env.example. Anchored to THIS FILE,
+ * never to process.cwd(): the MCP client spawns the server with an arbitrary
+ * working directory, and a cwd-relative path silently resolves somewhere else.
  *
- * The MCP client spawns this server with an arbitrary working directory. A
- * cwd-relative path silently creates a second database, and sessions written
- * by one process become invisible to the other. That bug cost real debugging
- * time in the previous implementation; it is structurally impossible here,
- * and it survived moving the whole project between directories unchanged.
+ * Read-only. Installed from npm this is inside node_modules, which npm replaces
+ * wholesale on every update — nothing the user owns may live here.
  */
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const PROJECT_ROOT = path.resolve(HERE, "..");
+export const PACKAGE_ROOT = path.resolve(HERE, "..");
+
+/**
+ * True in a source checkout. src/ is excluded from the published package, so
+ * its presence is the one signal that distinguishes "cloned repo" from
+ * "installed dependency" without asking the user to configure anything.
+ */
+const IS_CHECKOUT = existsSync(path.join(PACKAGE_ROOT, "src"));
+
+/**
+ * Where the user's own state lives: .env and the session database.
+ *
+ * In a checkout that is the project root, which is what every existing install
+ * already expects. Installed from npm it is ~/.willys-mcp, because the package
+ * directory is npm's to delete: writing credentials there means `npm update`
+ * throws away the password and every stored session, and a global install may
+ * not even be writable by the user running the server.
+ */
+export const STATE_DIR = resolveStateDir();
+
+function resolveStateDir(): string {
+  if (process.env.WILLYS_HOME) return path.resolve(process.env.WILLYS_HOME);
+  if (IS_CHECKOUT) return PACKAGE_ROOT;
+
+  const dir = path.join(homedir(), ".willys-mcp");
+  try {
+    // 0700: the directory holds a personnummer and live session cookies.
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+  } catch {
+    // Reported properly by the database check in setup.ts; failing at import
+    // time would take the whole server down before it can explain why.
+  }
+  return dir;
+}
+
+/** The .env the user fills in. Created by willys_setup_init. */
+export const ENV_FILE = (): string =>
+  process.env.WILLYS_ENV_FILE ?? path.join(STATE_DIR, ".env");
+
+/** Template shipped with the package, copied into place on first run. */
+export const ENV_TEMPLATE = path.join(PACKAGE_ROOT, ".env.example");
 
 export const DB_PATH =
-  process.env.WILLYS_DB_PATH ?? path.join(PROJECT_ROOT, "willys.db");
+  process.env.WILLYS_DB_PATH ?? path.join(STATE_DIR, "willys.db");
 
 /** Set in .env; look one up with willys_find_stores. */
 export const DEFAULT_STORE_ID = () => process.env.WILLYS_STORE_ID ?? null;

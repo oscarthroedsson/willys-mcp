@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { PROJECT_ROOT } from "./config.js";
+import { PACKAGE_ROOT } from "./config.js";
 import { err, ok, type Result } from "./core/result.js";
 
 /**
@@ -17,7 +17,7 @@ import { err, ok, type Result } from "./core/result.js";
  * as safe to call freely.
  */
 
-const DOCS_ROOT = path.join(PROJECT_ROOT, "docs");
+const DOCS_ROOT = path.join(PACKAGE_ROOT, "docs");
 
 /** The docs worth pointing the model at, with a one-line purpose each. */
 export const DOCS: Record<string, string> = {
