@@ -1,7 +1,7 @@
 import { displayVolume, toCgProduct } from "../src/upstream/citygross/map.js";
 import { splitNameExtra, toMathemProduct } from "../src/upstream/mathem/map.js";
 import { byUnitPrice, rankByUnit, rankCandidates } from "../src/chains/cheapest.js";
-import { isUnwantedPetFood, looselyRelates, sameHead } from "../src/domain/name-match.js";
+import { isUnwantedPetFood, looselyRelates, onlyAsModifier, sameHead } from "../src/domain/name-match.js";
 import { vetUnitPrice } from "../src/domain/unit-price.js";
 import { allAdapters } from "../src/chains/registry.js";
 import { CHAIN_IDS } from "../src/chains/types.js";
@@ -102,6 +102,26 @@ const mixed = rankByUnit([
 ]);
 check("vanligaste enheten först", mixed.ordered.map((x) => x.name).join(",") === "färs billig,färs dyr,ägg");
 check("blandade enheter ger notering", Boolean(mixed.mixedNote));
+
+// ── query only as the first part of another product's name ──
+check("Köttfärssås är inte köttfärs", onlyAsModifier("Köttfärssås Original", "köttfärs"));
+check("Äggnudlar är inte ägg", onlyAsModifier("Spicefield Äggnudlar", "ägg"));
+check("Nötfärs är köttfärs (samma efterled)", !onlyAsModifier("Nötfärs 12%", "köttfärs"));
+check("Paj Köttfärs innehåller ordet självt", !onlyAsModifier("Paj Köttfärs", "köttfärs"));
+check("Kronägg är ägg", !onlyAsModifier("Kronägg Ägg Frigående", "ägg"));
+check("Mjölk är inte modifierare av mjöl (för kort tillägg)", !onlyAsModifier("Mellanmjölk", "mjöl"));
+
+// ── a need in pieces ranks kr/st first even when kr/kg is the majority ──
+const eggs = rankCandidates(
+  [
+    { ...p("Äggnudlar", 34), compareUnit: "kg", unit: "1kg" },
+    { ...p("Tagliatelle Ägg", 41), compareUnit: "kg", unit: "500g" },
+    { ...p("Ägg 10P", 3.3), compareUnit: "st", unit: "10p" },
+    { ...p("Ägg 24P", 2.16), compareUnit: "st", unit: "24p" },
+  ],
+  { query: "ägg", need: "10 st", onlySwedish: false, requireSwedishMeat: false, excludeBrands: [], onlyBuyable: true, limit: 10 },
+);
+check("styckbehov: ägg överst, nudlar bort", eggs.products[0]?.name.startsWith("Ägg") === true && !eggs.products.some((x) => x.name === "Äggnudlar"), eggs.products.map((x) => x.name).join(","));
 
 console.log(failures === 0 ? "ALLA TESTER GRÖNA" : `${failures} FEL`);
 process.exit(failures === 0 ? 0 : 1);

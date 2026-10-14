@@ -141,6 +141,9 @@ async function candidatesFor(
     onlyBuyable: true,
     mustContain: need.mustContain,
     mustNotContain: need.mustNotContain,
+    // Rank the products sold the way the need is stated first: ten eggs must
+    // not be crowded out by egg noodles priced per kilo.
+    preferUnit: ({ mass: "kg", volume: "l", count: "st" } as const)[need.measure],
     limit,
   };
 

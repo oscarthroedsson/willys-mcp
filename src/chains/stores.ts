@@ -179,16 +179,31 @@ export async function nearestStores(
   return ok(ranked);
 }
 
-/**
- * Whether a store id exists in the chain's registry. Unknown chains (no
- * registry) answer true — there is nothing to check against.
- */
-export async function storeKnown(adapter: ChainAdapter, storeId: string): Promise<Result<boolean>> {
-  if (!adapter.listStores) return ok(true);
+/** One store from the registry by its id, or null. */
+export async function storeById(adapter: ChainAdapter, storeId: string): Promise<Result<Store | null>> {
   const fresh = await ensureFresh(adapter);
   if (!fresh.ok) return fresh;
   const row = conn()
-    .prepare("SELECT 1 FROM chain_stores WHERE chain = ? AND storeId = ?")
-    .get(adapter.id, storeId);
-  return ok(Boolean(row));
+    .prepare("SELECT * FROM chain_stores WHERE chain = ? AND storeId = ?")
+    .get(adapter.id, storeId) as Record<string, unknown> | undefined;
+  return ok(row ? rowToStore(row) : null);
+}
+
+/**
+ * Whether a store id exists at the chain. The registry answers first; a miss
+ * is confirmed with the chain's own store lookup when it has one, because a
+ * registry is not always complete — Coop's e-commerce list (pointofservices)
+ * lacks 252500 Stora Coop Bäckebol, the very store coopstore names for
+ * postcode 41301. Chains without a registry answer true.
+ */
+export async function storeKnown(adapter: ChainAdapter, storeId: string): Promise<Result<boolean>> {
+  if (!adapter.listStores) return ok(true);
+  const hit = await storeById(adapter, storeId);
+  if (!hit.ok) return hit;
+  if (hit.data) return ok(true);
+  if (adapter.registryIncomplete && adapter.storeDetail) {
+    const detail = await adapter.storeDetail(storeId);
+    return ok(detail.ok);
+  }
+  return ok(false);
 }

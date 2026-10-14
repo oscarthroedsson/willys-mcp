@@ -136,6 +136,13 @@ export interface ChainAdapter {
 
   /** The whole store registry in one go, for the local cache. */
   listStores?(): Promise<Result<Store[]>>;
+  /**
+   * True when listStores is known to miss stores that work (Coop's e-commerce
+   * list lacks 252500). Store validation then confirms a miss with
+   * storeDetail. False for Axfood, whose detail route answers for the OTHER
+   * chain's stores too (Hemköp /store/2110 returns a Willys store).
+   */
+  readonly registryIncomplete?: boolean;
   storeDetail?(storeId: string): Promise<Result<StoreDetail>>;
   /** Coop: which e-commerce store serves a postcode. */
   storeForPostcode?(postcode: string): Promise<Result<Store>>;

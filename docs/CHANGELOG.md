@@ -115,6 +115,12 @@ Nytt i 2.0 utan motsvarighet: `compare_prices` (samma vara i flera kedjor) och
   ord med samma efterled räknas nu som relaterade.
 - `find_cheapest` sorterar bort djurmat när frågan inte gäller djur
   (`bortfiltrerade.petFood`).
+- `find_cheapest` sorterar bort varor där frågan bara är förled i ett annat ord:
+  "Köttfärssås" för "köttfärs", "Äggnudlar" för "ägg". Köttfärssås rankades
+  tidigare som billigast köttfärs hos Willys och Hemköp.
+- Ett behov i styck rangordnar kr/st först. Förut kunde äggnudlar (kr/kg)
+  tränga undan alla ägg, och planen hos City Gross och Mathem räknades då utan
+  ägg och såg billigare ut än den var.
 
 ## [1.0.0] - 2026-07-31
 

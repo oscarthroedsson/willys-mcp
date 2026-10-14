@@ -9,6 +9,7 @@ import {
 import {
   isUnwantedPetFood,
   looselyRelates,
+  onlyAsModifier,
   nameContainsTerm,
   nameHasSubstring,
 } from "../domain/name-match.js";
@@ -58,6 +59,12 @@ export interface CheapestOptions {
   mustNotContain?: string[] | undefined;
   /** Requirement text such as "1.7 kg" — enables package maths. */
   need?: string | undefined;
+  /**
+   * The compare unit to rank first. Derived from `need` when not given: a need
+   * in pieces must see kr/st products first even when kr/kg ones are the
+   * majority (äggnudlar outnumber eggs for "ägg").
+   */
+  preferUnit?: "kg" | "l" | "st" | undefined;
   limit: number;
 }
 
@@ -160,7 +167,7 @@ export function rankCandidates(
     if (
       required.length === 0 &&
       opts.query.trim() !== "" &&
-      !looselyRelates(p.name, opts.query)
+      (!looselyRelates(p.name, opts.query) || onlyAsModifier(p.name, opts.query))
     ) {
       filteredOut.irrelevantName++;
       continue;
@@ -176,12 +183,15 @@ export function rankCandidates(
     kept.push(p);
   }
 
+  const need = opts.need ? parseRequirement(opts.need) : null;
+  const preferUnit =
+    opts.preferUnit ??
+    (need ? ({ mass: "kg", volume: "l", count: "st" } as const)[need.measure] : undefined);
+
   // The server ranks, never the upstream order.
-  const { ordered, mixedNote } = rankByUnit(kept);
+  const { ordered, mixedNote } = rankByUnit(kept, preferUnit);
   kept.length = 0;
   kept.push(...ordered);
-
-  const need = opts.need ? parseRequirement(opts.need) : null;
 
   const ranked: RankedProduct[] = kept.map((p) => {
     const pack = parseVolume(p.unit);
@@ -230,6 +240,7 @@ export function rankCandidates(
  */
 export function rankByUnit<T extends Pick<Product, "perUnit" | "compareUnit">>(
   items: T[],
+  prefer?: string,
 ): { ordered: T[]; mixedNote?: string } {
   const counts = new Map<string, number>();
   for (const p of items) {
@@ -239,7 +250,10 @@ export function rankByUnit<T extends Pick<Product, "perUnit" | "compareUnit">>(
   }
   if (counts.size <= 1) return { ordered: [...items].sort(byUnitPrice) };
 
-  const primary = [...counts].sort((a, b) => b[1] - a[1])[0]![0];
+  // The unit the need is stated in wins when any product has it; otherwise the
+  // unit most products share.
+  const primary =
+    prefer && counts.has(prefer) ? prefer : [...counts].sort((a, b) => b[1] - a[1])[0]![0];
   const first = items.filter((p) => p.compareUnit === primary).sort(byUnitPrice);
   const rest = items.filter((p) => p.compareUnit !== primary).sort(byUnitPrice);
   return {

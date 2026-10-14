@@ -101,12 +101,11 @@ export const storesTools = [
         const r = await adapter.storeDetail(a.storeId);
         return respond(r, (d) => compact({ kedja: adapter.id, ...prune(d) }));
       }
-      // No detail route (City Gross): answer from the registry.
-      const r = await stores.findStores(adapter, a.storeId, false, 50);
+      // No detail route (City Gross): answer from the registry, by id.
+      const r = await stores.storeById(adapter, a.storeId);
       if (!r.ok) return respond(r, () => "");
-      const hit = r.data.find((s) => s.storeId === a.storeId);
-      return hit
-        ? respond({ ok: true, data: hit }, (d) => compact({ kedja: adapter.id, ...prune(d) }))
+      return r.data
+        ? respond({ ok: true, data: r.data }, (d) => compact({ kedja: adapter.id, ...prune(d) }))
         : refuse("NOT_FOUND", `Butiken ${a.storeId} finns inte hos ${adapter.displayName}.`);
     },
   }),

@@ -52,6 +52,29 @@ export function looselyRelates(name: string, query: string): boolean {
   );
 }
 
+/** Extra letters after the query that make it a modifier, not the product. */
+const MIN_HEAD_SUFFIX = 3;
+
+/**
+ * The query appears only as the first part of a compound whose head is
+ * something else: "Köttfärssås" for "köttfärs" (a sauce), "Äggnudlar" for
+ * "ägg" (noodles), "Kaffefilter" for "kaffe". Swedish puts the head noun last,
+ * so these are different products that merely contain the word — the same
+ * principle by which mustContain "tomat" rejects "tomatsås". Cheapest-first
+ * would otherwise rank them above the real thing: köttfärssås at 51 kr/kg beat
+ * every mince at Willys, and äggnudlar pushed every egg out of the top twelve
+ * at City Gross and Mathem.
+ */
+export function onlyAsModifier(name: string, query: string): boolean {
+  const q = words(query);
+  const head = q[q.length - 1];
+  if (!head || head.length < 3) return false;
+  const ws = words(name);
+  const proper = ws.some((w) => w === head || w.endsWith(head) || sameHead(w, head));
+  if (proper) return false;
+  return ws.some((w) => w.startsWith(head) && w.length - head.length >= MIN_HEAD_SUFFIX);
+}
+
 /** Shortest shared ending that counts as a shared head noun. */
 const MIN_HEAD = 4;
 

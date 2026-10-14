@@ -90,6 +90,10 @@ butiks-id ger 404. Implementerat i `src/upstream/axfood/store-session.ts`, bara
 för anonyma anrop: på en inloggad session skulle det byta butik för
 användarens egen kundvagn.
 
+**Butiksdetalj är delad mellan sajterna:** `hemkop.se/axfood/rest/store/2110`
+svarar 200 med en Willys-butik. Butiksdetaljen kan alltså inte användas för att
+avgöra om ett id hör till kedjan; det gör registret.
+
 **Kategorifacett:** Hemköp returnerar ofta ingen `category`-facett, och då
 ignoreras `:category:X` i `q` utan felmeddelande. Adaptern rapporterar därför
 en kategori som tillämpad bara när svaret innehåller den.
@@ -158,7 +162,7 @@ Näringsvärdenas bas står i `nutrientInformation[0].header`
 | `GET https://proxy.api.coop.se/external/store/stores?api-version=v2` | `storeApiSubscriptionKey` | 787 butiker: `storeId`, `ledgerAccountNumber`, `conceptName` |
 | `GET …/external/store/stores/{ledger}?api-version=v2` | samma | Adress, lat/lng, öppettider. Kräver 6-siffrigt **ledger**, inte `storeId` |
 | `GET https://external.api.coop.se/ecommerce/coop/coopstore?postCode=41301&fields=BASIC&api-version=v1` | `hybrisApiSubscriptionKey` | **Postnummer → e-handelsbutik** (`252500` Stora Coop Bäckebol) |
-| `GET https://external.api.coop.se/ecommerce/coop/pointofservices?query=&pageSize=500&fields=FULL&api-version=v1` | `hybrisApiSubscriptionKey` | **Alla 250 e-handelsbutiker** med ledger-nummer i `name`, adress och koordinater (2026-10-14). Adaptern använder detta som register |
+| `GET https://external.api.coop.se/ecommerce/coop/pointofservices?query=&pageSize=500&fields=FULL&api-version=v1` | `hybrisApiSubscriptionKey` | 250 e-handelsbutiker med ledger-nummer i `name`, adress och koordinater (2026-10-14). Adaptern använder detta som register — **men listan är inte komplett**: 252500 Stora Coop Bäckebol, som `coopstore` anger för postnummer 41301, saknas. Butiksvalideringen bekräftar därför en miss mot butiks-API:t innan den avvisar |
 
 **Fallgrop:** sök med en vanlig butiks ledger ger 0 träffar. Bara e-handelsbutiker
 har sortiment, så rätt väg är postnummer → `coopstore` → `store=`. Priserna

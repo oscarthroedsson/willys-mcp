@@ -34,6 +34,7 @@ export const coopAdapter: ChainAdapter = {
     "stores",
   ]),
   storeScope: "required",
+  registryIncomplete: true,
   productCode: { pattern: /^\d{8,14}$/, hint: "Coops produktkod är EAN, 8–14 siffror, t.ex. 7300156581006" },
 
   async search(ctx, query, page, size) {
