@@ -18,7 +18,8 @@ Det finns ingen unit-testsvit och inget byggsteg — `tsx` kör TypeScript direk
 ändring.
 
 `npm run smoke` kräver giltiga uppgifter i `.env` och gör riktiga anrop mot
-Willys. Den lägger inte något i kundvagnen, men den loggar in.
+Willys. Den loggar in, lägger en vara i kundvagnen och tar bort den igen, och
+kontrollerar att vagnen är som före.
 
 ## Språk
 
@@ -33,8 +34,15 @@ lika precisa som kommentarerna.
 `NOT_FOUND`, `UPSTREAM`, `INPUT`) ska överleva hela vägen till verktygssvaret —
 den är det modellen agerar på.
 
-**En fil per uppströmsresurs.** `src/upstream/` har en modul per resurs och en
-barrel i `index.ts`. Lägg inte tillbaka blandade ansvar i en gemensam klientfil.
+**En adapter per plattform, en fil per uppströmsresurs.** `src/upstream/<plattform>/`
+(`axfood/`, `coop/` …) har en modul per resurs och en barrel i `index.ts`. Lägg
+inte tillbaka blandade ansvar i en gemensam klientfil. `src/chains/` binder ihop
+dem: `types.ts` är `ChainAdapter`-kontraktet, `registry.ts` mappar `ChainId` →
+adapter, och delad logik som ska gälla alla kedjor (rangordning i `cheapest.ts`,
+butiksregistret i `stores.ts`) ligger där — aldrig i en enskild adapter.
+Willys och Hemköp är samma Axfood-API; en skillnad mellan dem hör hemma i
+`AxfoodSite`, inte i en kopia av koden. API-kartan per kedja står i
+`docs/kedjor.md`.
 
 **Ett verktyg = ett objekt = en fil.** Varje verktyg definieras med `defineTool`
 i en gruppfil under `src/tools/` (`session.ts`, `search-tools.ts`,

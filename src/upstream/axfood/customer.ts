@@ -1,6 +1,6 @@
-import { ENDPOINTS } from "../constants/index.js";
-import { request } from "../core/http.js";
-import { ok, type Result } from "../core/result.js";
+import { axfoodEndpoints, type AxfoodSite } from "../../constants/index.js";
+import { request } from "../../core/http.js";
+import { ok, type Result } from "../../core/result.js";
 import { parse } from "./parse.js";
 import { UpstreamCustomer } from "./schemas.js";
 
@@ -17,9 +17,13 @@ export interface CustomerProfile {
  * of a uid is what actually proves the cookies are live.
  */
 export async function getCustomer(
+  site: AxfoodSite,
   cookies: string,
 ): Promise<Result<CustomerProfile>> {
-  const res = await request(ENDPOINTS.customer, { cookies });
+  const res = await request(axfoodEndpoints(site).customer, {
+    cookies,
+    label: site.label,
+  });
   if (!res.ok) return res;
 
   const parsed = parse(UpstreamCustomer, res.data);

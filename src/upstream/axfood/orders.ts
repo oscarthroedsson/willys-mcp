@@ -1,6 +1,6 @@
-import { ENDPOINTS } from "../constants/index.js";
-import { request } from "../core/http.js";
-import { ok, type Result } from "../core/result.js";
+import { axfoodEndpoints, type AxfoodSite } from "../../constants/index.js";
+import { request } from "../../core/http.js";
+import { ok, type Result } from "../../core/result.js";
 import { parse } from "./parse.js";
 import { UpstreamOrders } from "./schemas.js";
 
@@ -47,11 +47,15 @@ function orderId(raw: Record<string, unknown>): string {
  * response. Slicing here keeps the model's context from absorbing all of it.
  */
 export async function getOrders(
+  site: AxfoodSite,
   cookies: string,
   limit = 10,
   offset = 0,
 ): Promise<Result<{ orders: OrderSummary[]; total: number }>> {
-  const res = await request(ENDPOINTS.orders, { cookies });
+  const res = await request(axfoodEndpoints(site).orders, {
+    cookies,
+    label: site.label,
+  });
   if (!res.ok) return res;
 
   const parsed = parse(UpstreamOrders, res.data);
@@ -72,13 +76,14 @@ export async function getOrders(
 
 /** All line items in one past order, flattened out of their category buckets. */
 export async function getOrderDetails(
+  site: AxfoodSite,
   cookies: string,
   id: string,
 ): Promise<Result<{ id: string; lines: OrderLine[] }>> {
-  const url = `${ENDPOINTS.orderData}?q=${encodeURIComponent(id)}`;
+  const url = `${axfoodEndpoints(site).orderData}?q=${encodeURIComponent(id)}`;
   const res = await request<{
     categoryOrderedDeliveredProducts?: Record<string, unknown[]>;
-  }>(url, { cookies });
+  }>(url, { cookies, label: site.label });
   if (!res.ok) return res;
 
   const byCategory = res.data.categoryOrderedDeliveredProducts ?? {};
@@ -114,20 +119,22 @@ export async function getOrderDetails(
  * Costs one request per scanned order, which is why `scanOrders` is capped.
  */
 export async function getFrequentProducts(
+  site: AxfoodSite,
   cookies: string,
   scanOrders: number,
   limit: number,
 ): Promise<Result<{ scanned: number; products: FrequentProduct[] }>> {
-  const list = await request<Array<Record<string, unknown>>>(ENDPOINTS.orders, {
-    cookies,
-  });
+  const list = await request<Array<Record<string, unknown>>>(
+    axfoodEndpoints(site).orders,
+    { cookies, label: site.label },
+  );
   if (!list.ok) return list;
 
   const ids = list.data.map(orderId).filter(Boolean).slice(0, scanOrders);
   const tally = new Map<string, FrequentProduct>();
 
   for (const id of ids) {
-    const detail = await getOrderDetails(cookies, id);
+    const detail = await getOrderDetails(site, cookies, id);
     // One unreadable order should not sink the whole tally.
     if (!detail.ok) continue;
 

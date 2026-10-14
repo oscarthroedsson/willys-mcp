@@ -1,7 +1,5 @@
-import { ENDPOINTS, SORT } from "../constants/index.js";
-import { request } from "../core/http.js";
-import { err, ok, type Result } from "../core/result.js";
-import { toProduct, type Product } from "../domain/product.js";
+import { ok, type Result } from "../core/result.js";
+import type { Product } from "../domain/product.js";
 import {
   packagesNeeded,
   parseRequirement,
@@ -13,32 +11,24 @@ import {
   nameContainsTerm,
   nameHasSubstring,
 } from "../domain/name-match.js";
-import { UpstreamSearch } from "./schemas.js";
+import type { AdapterCtx, CategoryOption, ChainAdapter } from "./types.js";
 
 /**
- * Ranked product lookup — one request, filtered and sorted upstream.
+ * "Cheapest" for any chain: fetch candidates from the adapter, filter, rank.
  *
- * Willys runs SAP Hybris, whose Solr layer encodes facet filters inside the
- * `q` parameter as `text:facetKey:facetValue`. The search response hands us
- * the exact strings to use, so none of this is guessed:
- *
- *   q=köttfärs               -> 37 hits, cheapest is a Findus sauce
- *   q=köttfärs:category:Kött -> 29 hits, cheapest is actual mince
- *
- * Combined with `sort=compareprice:asc` this ranks by price per kg/l/st across
- * the ENTIRE result set. Two earlier designs are gone: paging and sorting in
- * memory (which read a subset and called it "cheapest"), and browsing
- * /c/{slug} (which ignores `sort` outright and caps pages at 100).
- *
- * Sorting by `price:asc` is a trap worth naming: it puts a 16 kr toddler meal
- * (75 kr/kg) above a 69 kr kilo of mince.
+ * The adapter only fetches. Filtering and ranking live here so that every
+ * chain gets the same guards — the name check that stops "torkad dragon"
+ * matching a dog chew, the brand and origin filters, the package maths — and
+ * so that ranking never trusts an upstream sort. Only Axfood sorts correctly on
+ * comparison price; City Gross ignores campaign prices and Mathem cannot sort
+ * at all (docs/kedjor.md).
  */
 
 export interface CheapestOptions {
   query: string;
   /**
    * Facet value from `availableCategories`, e.g. "Kött" or "Fågel". Applied
-   * server-side. Deliberately a free string rather than an enum: facets are
+   * upstream. Deliberately a free string rather than an enum: facets are
    * per-query and returned by the API, so a hardcoded list would go stale.
    */
   category?: string | undefined;
@@ -75,11 +65,6 @@ export interface RankedProduct extends Product {
   estimatedCost: number | null;
 }
 
-export interface CategoryOption {
-  name: string;
-  count: number;
-}
-
 export interface CheapestResult {
   totalHits: number;
   inspected: number;
@@ -100,46 +85,22 @@ export interface CheapestResult {
   note?: string;
 }
 
-/** Willys caps page size at 100 regardless of what is requested. */
-const PAGE_SIZE = 100;
-
-interface RawFacet {
-  code?: string;
-  name?: string;
-  values?: Array<{ code?: string; name?: string; count?: number }>;
+/**
+ * Cheapest per unit first; products without a comparable price last, in the
+ * order they arrived. Stable, so equal prices keep upstream relevance order.
+ */
+export function byUnitPrice<T extends Pick<Product, "perUnit">>(a: T, b: T): number {
+  if (a.perUnit === null && b.perUnit === null) return 0;
+  if (a.perUnit === null) return 1;
+  if (b.perUnit === null) return -1;
+  return a.perUnit - b.perUnit;
 }
 
-function readCategoryFacets(payload: unknown): CategoryOption[] {
-  const facets = (payload as { facets?: RawFacet[] })?.facets;
-  if (!Array.isArray(facets)) return [];
-
-  const cat = facets.find((f) => (f.code ?? f.name) === "category");
-  return (cat?.values ?? [])
-    .map((v) => ({ name: String(v.code ?? v.name ?? ""), count: v.count ?? 0 }))
-    .filter((v) => v.name)
-    .sort((a, b) => b.count - a.count);
-}
-
-export async function findCheapest(
-  cookies: string,
+/** The filter and ranking pass, separated from fetching so it can be tested offline. */
+export function rankCandidates(
+  rows: Product[],
   opts: CheapestOptions,
-): Promise<Result<CheapestResult>> {
-  // Hybris puts facet filters in `q`; sorting stays a separate parameter.
-  const q = opts.category
-    ? `${opts.query}:category:${opts.category}`
-    : opts.query;
-
-  const url =
-    `${ENDPOINTS.search}?q=${encodeURIComponent(q)}` +
-    `&page=0&size=${PAGE_SIZE}&sort=${SORT.comparePriceAsc}`;
-
-  const res = await request(url, { cookies });
-  if (!res.ok) return res;
-
-  const parsed = UpstreamSearch.safeParse(res.data);
-  if (!parsed.success) return err("SHAPE", "Oväntat format på sökresultatet");
-
-  const rows = parsed.data.results ?? [];
+): Pick<CheapestResult, "filteredOut" | "products" | "note"> {
   const banned = opts.excludeBrands
     .map((b) => b.trim().toLowerCase())
     .filter(Boolean);
@@ -158,9 +119,7 @@ export async function findCheapest(
   const forbidden = opts.mustNotContain ?? [];
 
   const kept: Product[] = [];
-  for (const raw of rows) {
-    const p = toProduct(raw);
-
+  for (const p of rows) {
     if (opts.onlyBuyable && !p.buyable) {
       filteredOut.notBuyable++;
       continue;
@@ -203,9 +162,11 @@ export async function findCheapest(
     kept.push(p);
   }
 
+  // The server ranks, never the upstream order.
+  kept.sort(byUnitPrice);
+
   const need = opts.need ? parseRequirement(opts.need) : null;
 
-  // Upstream order is already cheapest-per-unit first; map() preserves it.
   const ranked: RankedProduct[] = kept.map((p) => {
     const pack = parseVolume(p.unit);
     const packaging = need && pack ? packagesNeeded(need, pack) : null;
@@ -239,15 +200,29 @@ export async function findCheapest(
     }
   }
 
-  const result: CheapestResult = {
-    totalHits: parsed.data.pagination?.totalNumberOfResults ?? rows.length,
-    inspected: rows.length,
-    availableCategories: readCategoryFacets(res.data),
-    appliedCategory: opts.category ?? null,
-    filteredOut,
-    products: ranked.slice(0, opts.limit),
-  };
-  if (note) result.note = note;
+  return note ? { filteredOut, products: ranked, note } : { filteredOut, products: ranked };
+}
 
+export async function findCheapest(
+  adapter: ChainAdapter,
+  ctx: AdapterCtx,
+  opts: CheapestOptions,
+): Promise<Result<CheapestResult>> {
+  const res = await adapter.candidates(ctx, {
+    query: opts.query,
+    category: opts.category,
+  });
+  if (!res.ok) return res;
+
+  const ranked = rankCandidates(res.data.products, opts);
+  const result: CheapestResult = {
+    totalHits: res.data.totalHits,
+    inspected: res.data.products.length,
+    availableCategories: res.data.categories,
+    appliedCategory: res.data.appliedCategory,
+    filteredOut: ranked.filteredOut,
+    products: ranked.products.slice(0, opts.limit),
+  };
+  if (ranked.note) result.note = ranked.note;
   return ok(result);
 }

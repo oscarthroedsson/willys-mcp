@@ -1,4 +1,5 @@
-import { findCheapest, type CheapestOptions } from "../src/upstream/cheapest.js";
+import { findCheapest, type CheapestOptions } from "../src/chains/cheapest.js";
+import { willys } from "../src/chains/axfood.js";
 
 /** Search is unauthenticated, so this needs no session. */
 
@@ -23,7 +24,7 @@ const CASES: Array<{ label: string; opts: CheapestOptions }> = [
 
 async function main() {
   for (const c of CASES) {
-    const r = await findCheapest("", c.opts);
+    const r = await findCheapest(willys, { cookies: "" }, c.opts);
     console.log(`=== ${c.label} ===`);
     if (!r.ok) { console.log("  FEL:", r.kind, r.message); continue; }
     const d = r.data;

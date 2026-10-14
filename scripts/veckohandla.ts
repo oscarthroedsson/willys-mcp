@@ -1,8 +1,10 @@
 import { harvestCookies, readCredentials } from "../src/auth/login.js";
 import { createSession, findValidSession, getCookies } from "../src/auth/session.js";
 import { verifySession } from "../src/auth/login.js";
-import { addToCart, getCart } from "../src/upstream/cart.js";
-import { findCheapest } from "../src/upstream/cheapest.js";
+import { WILLYS } from "../src/constants/index.js";
+import { addToCart, getCart } from "../src/upstream/axfood/cart.js";
+import { findCheapest } from "../src/chains/cheapest.js";
+import { willys } from "../src/chains/axfood.js";
 
 /**
  * Week shop: four recipes, aggregated, matched and added to the cart.
@@ -85,7 +87,7 @@ async function main() {
   const cookies = DRY ? "" : await session();
 
   if (!DRY) {
-    const before = await getCart(cookies);
+    const before = await getCart(WILLYS, cookies);
     console.log(`kundvagn före: ${before.ok ? before.data.items : "?"} varor\n`);
   } else {
     console.log("TORRKÖRNING — inget läggs i kundvagnen\n");
@@ -96,7 +98,7 @@ async function main() {
   let total = 0;
 
   for (const it of LIST) {
-    const r = await findCheapest(cookies, {
+    const r = await findCheapest(willys, { cookies }, {
       query: it.query,
       category: it.category,
       onlySwedish: false,
@@ -118,7 +120,7 @@ async function main() {
     const qty = it.qty ?? p.packaging?.packages ?? 1;
     const add = DRY
       ? ({ ok: true } as const)
-      : await addToCart(cookies, p.code, qty);
+      : await addToCart(WILLYS, cookies, p.code, qty);
 
     if (!add.ok) {
       console.log(`MISS  ${it.label.padEnd(26)} kunde ej läggas i: ${add.kind}`);
@@ -136,7 +138,7 @@ async function main() {
   }
 
   if (!DRY) {
-    const after = await getCart(cookies);
+    const after = await getCart(WILLYS, cookies);
     console.log(`\nkundvagn efter: ${after.ok ? after.data.items : "?"} varor, ${after.ok ? after.data.total : "?"}`);
   }
   console.log(`rader: ${added.length} | missar: ${failed.length} | summa ca ${total.toFixed(2)} kr`);

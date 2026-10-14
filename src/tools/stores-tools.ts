@@ -2,8 +2,8 @@ import { z } from "zod";
 import { TOOL } from "../constants/index.js";
 import { DEFAULT_STORE_ID } from "../config.js";
 import { compact, prune, pruneProduct } from "../mappers/prune.js";
-import * as api from "../upstream/index.js";
-import * as stores from "../upstream/stores.js";
+import { willys } from "../chains/axfood.js";
+import * as stores from "../chains/stores.js";
 import { defineTool, failure, respond } from "./kit.js";
 import { sessionId } from "./schema-parts.js";
 
@@ -11,7 +11,8 @@ export const storesTools = [
   defineTool({
     name: TOOL.findStores,
     description:
-      "Slå upp butiker på ort, namn eller postnummer. Läser ur lokal cache (hela kedjan, 254 butiker).",
+      "Slå upp butiker på ort, namn eller postnummer. Läser ur lokal cache av hela kedjans register, " +
+      "som hämtas om automatiskt när det är äldre än en vecka.",
     needsAuth: false, // Store lookups need no session: the registry is public.
     schema: z
       .object({
@@ -24,7 +25,7 @@ export const storesTools = [
       })
       .strict(),
     async handle(a) {
-      const r = await stores.findStores(a.query, a.onlyClickAndCollect, a.limit);
+      const r = await stores.findStores(willys, a.query, a.onlyClickAndCollect, a.limit);
       return respond(r, (d) => compact({ traff: d.length, butiker: d.map(prune) }));
     },
   }),
@@ -43,6 +44,7 @@ export const storesTools = [
       .strict(),
     async handle(a) {
       const r = await stores.nearestStores(
+        willys,
         a.lat,
         a.lng,
         a.onlyClickAndCollect,
@@ -61,7 +63,7 @@ export const storesTools = [
       .object({ storeId: z.string().regex(/^\d{3,6}$/, "butiks-id är 3-6 siffror") })
       .strict(),
     async handle(a) {
-      const r = await stores.getStoreDetail(a.storeId);
+      const r = await willys.storeDetail!(a.storeId);
       return respond(r, (d) => compact(prune(d)));
     },
   }),
@@ -72,7 +74,7 @@ export const storesTools = [
     needsAuth: false,
     schema: z.object({}).strict(),
     async handle() {
-      const r = await stores.refreshStores();
+      const r = await stores.refreshStores(willys);
       return respond(r, (n) => `Butiksregistret uppdaterat: ${n} butiker.`);
     },
   }),
@@ -102,7 +104,7 @@ export const storesTools = [
             "(slå upp med willys_find_stores).",
         );
       }
-      const r = await api.getCampaigns(ctx.cookies, storeId, a.page, a.size);
+      const r = await willys.campaigns!(ctx, storeId, a.page, a.size);
       return respond(r, (d) =>
         compact({
           butik: d.storeId,

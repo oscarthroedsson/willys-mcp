@@ -11,8 +11,10 @@ import { parseVolume } from "../domain/volume.js";
 import { pieceWeight } from "../domain/piece-weights.js";
 import { matchesQuery, attributeConflict } from "../domain/name-match.js";
 import { verifySession } from "../auth/login.js";
-import { addToCart, getCart, removeFromCart } from "../upstream/cart.js";
-import { findCheapest } from "../upstream/cheapest.js";
+import { WILLYS } from "../constants/index.js";
+import { addToCart, getCart, removeFromCart } from "../upstream/axfood/cart.js";
+import { findCheapest } from "../chains/cheapest.js";
+import { willys } from "../chains/axfood.js";
 import {
   listChoices,
   listNeeds,
@@ -150,7 +152,7 @@ async function candidatesFor(
       brand: p.brand,
     }));
 
-  const first = await findCheapest(cookies, {
+  const first = await findCheapest(willys, { cookies }, {
     ...base,
     category: need.category ?? undefined,
   });
@@ -167,7 +169,7 @@ async function candidatesFor(
 
   // A category that filtered everything away is almost always wrong rather than
   // a genuinely empty shelf. Retry without it to learn the real facet list.
-  const retry = await findCheapest(cookies, { ...base, category: undefined });
+  const retry = await findCheapest(willys, { cookies }, { ...base, category: undefined });
   if (!retry.ok) return retry;
 
   const realFacets = retry.data.availableCategories.map((c) => c.name);
@@ -181,7 +183,7 @@ async function candidatesFor(
     (f) => normaliseFacet(f) === normaliseFacet(need.category!),
   );
   if (canonical && canonical !== need.category) {
-    const canon = await findCheapest(cookies, { ...base, category: canonical });
+    const canon = await findCheapest(willys, { cookies }, { ...base, category: canonical });
     if (canon.ok && canon.data.products.length > 0) {
       return ok({
         candidates: toCandidates(canon.data.products),
@@ -474,7 +476,7 @@ export async function applyPlan(
     }
   }
 
-  const before = await getCart(cookies);
+  const before = await getCart(WILLYS, cookies);
   // No "*" here on purpose: a wrong-product match must be confirmed per line.
   // Blanket-accepting uncertain matches is exactly what this gate prevents.
   const accepted = new Set(acceptMatch);
@@ -580,7 +582,7 @@ export async function applyPlan(
     changes.push({ label, action: a.kind, detail, ok: true });
   }
 
-  const after = dryRun ? before : await getCart(cookies);
+  const after = dryRun ? before : await getCart(WILLYS, cookies);
 
   return ok({
     dryRun,
@@ -600,16 +602,16 @@ async function runAction(
 ): Promise<Result<unknown>> {
   switch (a.kind) {
     case "add":
-      return addToCart(cookies, a.code, a.packages);
+      return addToCart(WILLYS, cookies, a.code, a.packages);
 
     case "change_quantity":
       // addProducts sets the quantity rather than incrementing it.
-      return addToCart(cookies, a.code, a.to);
+      return addToCart(WILLYS, cookies, a.code, a.to);
 
     case "replace": {
-      const removed = await removeFromCart(cookies, a.fromCode);
+      const removed = await removeFromCart(WILLYS, cookies, a.fromCode);
       if (!removed.ok) return removed;
-      return addToCart(cookies, a.toCode, a.packages);
+      return addToCart(WILLYS, cookies, a.toCode, a.packages);
     }
   }
 }

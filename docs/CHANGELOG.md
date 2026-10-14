@@ -36,6 +36,23 @@ att verktygsnamn, parametrar eller svarsformat du minns kan vara fel. Läs då
   AI-klient vet vilken version den pratar med.
 - Borttagna verktyg svarar med sin ersättning i stället för "Okänt verktyg"
   (`RETIRED_TOOLS`).
+- Internt: en adapter per kedja (`src/chains/`). Willys och Hemköp delar en
+  Axfood-adapter. Hemköp är inte nåbart via verktygen än; det kommer med
+  `chain`-parametern.
+
+### Ändrat
+
+- `willys_find_stores`, `willys_nearest_stores` och `willys_get_store` svarar
+  med fälten `ecommerce` och `kind` i stället för `clickAndCollect` och
+  `willysHemma`. Butiksregistret hämtas om automatiskt när det är äldre än
+  7 dagar.
+- `willys_find_cheapest` rangordnar på jämförpris i servern i stället för att
+  lita på Willys sortering. Resultatet blir detsamma för Willys.
+
+### Fixat
+
+- `willys_find_stores` hittar butiker på postnummer skrivet utan mellanslag
+  (`82231` matchar `822 31`).
 
 ## [1.0.0] - 2026-07-31
 

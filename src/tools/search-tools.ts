@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { LIMITS, TOOL } from "../constants/index.js";
 import { compact, prune, pruneProduct } from "../mappers/prune.js";
-import * as api from "../upstream/index.js";
-import { findCheapest } from "../upstream/cheapest.js";
+import { willys } from "../chains/axfood.js";
+import { findCheapest } from "../chains/cheapest.js";
 import { defineTool, respond } from "./kit.js";
 import { productCode, sessionId } from "./schema-parts.js";
 
@@ -26,7 +26,7 @@ export const searchTools = [
       })
       .strict(),
     async handle(a, ctx) {
-      const r = await api.search(ctx.cookies, a.query, a.page, a.size);
+      const r = await willys.search(ctx, a.query, a.page, a.size);
       return respond(r, (d) => {
         let items = d.products;
         if (a.onlySwedish) items = items.filter((p) => p.origin === "SE");
@@ -53,7 +53,7 @@ export const searchTools = [
       .object({ sessionId, term: z.string().min(1).max(LIMITS.maxQueryLength) })
       .strict(),
     async handle(a, ctx) {
-      const r = await api.searchSuggestions(ctx.cookies, a.term);
+      const r = await willys.suggestions(ctx, a.term);
       return respond(r, (d) => compact({ forslag: d }));
     },
   }),
@@ -64,7 +64,7 @@ export const searchTools = [
     needsAuth: true,
     schema: z.object({ sessionId, productCode }).strict(),
     async handle(a, ctx) {
-      const r = await api.getProductDetail(ctx.cookies, a.productCode);
+      const r = await willys.product(ctx, a.productCode);
       return respond(r, (d) => compact(prune(pruneProduct(d))));
     },
   }),
@@ -131,7 +131,7 @@ export const searchTools = [
       })
       .strict(),
     async handle(a, ctx) {
-      const r = await findCheapest(ctx.cookies, {
+      const r = await findCheapest(willys, ctx, {
         query: a.query,
         category: a.category,
         onlySwedish: a.onlySwedish,

@@ -1,37 +1,34 @@
-import { ENDPOINTS } from "../constants/index.js";
-import { request } from "../core/http.js";
-import { err, ok, type Result } from "../core/result.js";
-import { toProduct, type Product } from "../domain/product.js";
+import { axfoodEndpoints, type AxfoodSite } from "../../constants/index.js";
+import { request } from "../../core/http.js";
+import { err, ok, type Result } from "../../core/result.js";
+import { toProduct } from "../../domain/product.js";
+import type { ProductDetail } from "../../chains/types.js";
 import { UpstreamProduct } from "./schemas.js";
-
-export interface ProductDetail extends Product {
-  ingredients: string | null;
-  description: string | null;
-  nutrition: unknown[] | null;
-  /** e.g. "100 gram" — what the nutrition figures refer to. */
-  nutritionBasis: string | null;
-}
 
 /**
  * Product detail over plain REST.
  *
  * Replaces `_next/data/{buildId}/produktdetalj/{code}.json`, whose build id
- * rotates on every Willys deploy — the previous implementation hardcoded
- * `a4eecdbf` and silently 404'd for months. This route carries 90 fields
- * including ingredients and nutrition, and has no build id to go stale.
+ * rotates on every deploy — the previous implementation hardcoded `a4eecdbf`
+ * and silently 404'd for months. This route carries 90 fields including
+ * ingredients and nutrition, and has no build id to go stale.
  */
 export async function getProductDetail(
+  site: AxfoodSite,
   cookies: string,
   productCode: string,
 ): Promise<Result<ProductDetail>> {
-  const url = `${ENDPOINTS.product}/${encodeURIComponent(productCode)}`;
-  const res = await request<Record<string, unknown>>(url, { cookies });
+  const url = `${axfoodEndpoints(site).product}/${encodeURIComponent(productCode)}`;
+  const res = await request<Record<string, unknown>>(url, {
+    cookies,
+    label: site.label,
+  });
 
   if (!res.ok) {
-    // Willys answers 400, not 404, for a product code that does not exist.
+    // Axfood answers 400, not 404, for a product code that does not exist.
     // Surfacing that as UPSTREAM would read as an outage rather than a typo.
     if (res.status === 400) {
-      return err("NOT_FOUND", `Ingen produkt med koden ${productCode}`, 400);
+      return err("NOT_FOUND", `Ingen produkt med koden ${productCode} hos ${site.label}`, 400);
     }
     return res;
   }

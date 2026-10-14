@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { LIMITS, TOOL } from "../constants/index.js";
 import { compact } from "../mappers/prune.js";
-import * as api from "../upstream/index.js";
+import { WILLYS } from "../constants/index.js";
+import * as api from "../upstream/axfood/index.js";
 import { defineTool, respond } from "./kit.js";
 import { sessionId } from "./schema-parts.js";
 
@@ -18,7 +19,7 @@ export const ordersTools = [
       })
       .strict(),
     async handle(a, ctx) {
-      const r = await api.getOrders(ctx.cookies, a.limit, a.offset);
+      const r = await api.getOrders(WILLYS, ctx.cookies, a.limit, a.offset);
       return respond(r, (d) =>
         compact({
           totalt: d.total,
@@ -37,7 +38,7 @@ export const ordersTools = [
       .object({ sessionId, orderId: z.string().min(1).max(40) })
       .strict(),
     async handle(a, ctx) {
-      const r = await api.getOrderDetails(ctx.cookies, a.orderId);
+      const r = await api.getOrderDetails(WILLYS, ctx.cookies, a.orderId);
       return respond(r, (d) =>
         compact({ order: d.id, antal_rader: d.lines.length, varor: d.lines }),
       );
@@ -63,7 +64,7 @@ export const ordersTools = [
       })
       .strict(),
     async handle(a, ctx) {
-      const r = await api.getFrequentProducts(ctx.cookies, a.scanOrders, a.limit);
+      const r = await api.getFrequentProducts(WILLYS, ctx.cookies, a.scanOrders, a.limit);
       return respond(r, (d) =>
         compact({ genomsokta_ordrar: d.scanned, varor: d.products }),
       );
@@ -76,7 +77,7 @@ export const ordersTools = [
     needsAuth: true,
     schema: z.object({ sessionId }).strict(),
     async handle(_a, ctx) {
-      const r = await api.getCustomer(ctx.cookies);
+      const r = await api.getCustomer(WILLYS, ctx.cookies);
       return respond(r, (d) => compact(d));
     },
   }),

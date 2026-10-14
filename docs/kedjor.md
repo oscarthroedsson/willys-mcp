@@ -80,9 +80,19 @@ Det som skiljer:
 | `/search/campaigns/offline?q={storeId}` | Butikens fysiska erbjudanden. |
 | `/search/multisearchComplete?q=&page=&size=` | Det sidan själv anropar; samma kuvert som `/search`. |
 
-Öppen fråga: hur sätts butik för en anonym session? Troligen
-`POST /axfood/rest/cart/store?storeId=`. Det är inte testat eftersom det är en
-skrivning.
+**Butik för en anonym session** (verifierat 2026-10-14): `GET /axfood/rest/csrf-token`
+ger JSESSIONID och token, sedan
+`POST /axfood/rest/store/activate?storeId={id}&activelySelected=true&forceAsPickingStore=true`
+med `x-csrf-token`. Därefter svarar sök och produkt med den butikens priser
+(Hemköp 4146: mellanmjölk 17,45 → 17,88 kr). Willys gav samma pris i 2288 som i
+standardbutiken, så Willys verkar ha samma pris i hela landet. Ogiltigt
+butiks-id ger 404. Implementerat i `src/upstream/axfood/store-session.ts`, bara
+för anonyma anrop: på en inloggad session skulle det byta butik för
+användarens egen kundvagn.
+
+**Kategorifacett:** Hemköp returnerar ofta ingen `category`-facett, och då
+ignoreras `:category:X` i `q` utan felmeddelande. Adaptern rapporterar därför
+en kategori som tillämpad bara när svaret innehåller den.
 
 ---
 
@@ -248,5 +258,4 @@ hittades i sök, så servern sorterar själv. Filtrering sker via
 ## Öppet
 
 1. Allt inloggat: kundvagn, ordrar, profil per kedja.
-2. Hur Hemköp sätter butik för en anonym session.
-3. Om Mathems priser skiljer sig per region.
+2. Om Mathems priser skiljer sig per region.

@@ -4,7 +4,7 @@ import {
   SWEDISH_MEAT_LABELS,
   SWEDISH_ORIGIN_LABELS,
 } from "../constants/index.js";
-import type { UpstreamProductT } from "../upstream/schemas.js";
+import type { UpstreamProductT } from "../upstream/axfood/schemas.js";
 import { parseVolume, unitPrice } from "./volume.js";
 
 /** "SE" only on explicit Swedish marking; absence proves nothing. */

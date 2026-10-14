@@ -1,4 +1,5 @@
-import { findCheapest } from "../src/upstream/cheapest.js";
+import { findCheapest } from "../src/chains/cheapest.js";
+import { willys } from "../src/chains/axfood.js";
 
 /**
  * Print candidates for review. Chooses nothing.
@@ -13,7 +14,7 @@ const QUERIES = process.argv.slice(2);
 async function main() {
   for (const q of QUERIES) {
     const [query, category] = q.split("|");
-    const r = await findCheapest("", {
+    const r = await findCheapest(willys, { cookies: "" }, {
       query: query!,
       category: category || undefined,
       onlySwedish: false,

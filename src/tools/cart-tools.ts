@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { LIMITS, TOOL } from "../constants/index.js";
 import { compact, pruneProduct } from "../mappers/prune.js";
-import * as api from "../upstream/index.js";
+import { WILLYS } from "../constants/index.js";
+import * as api from "../upstream/axfood/index.js";
 import { defineTool, respond } from "./kit.js";
 import { productCode, sessionId } from "./schema-parts.js";
 
@@ -12,7 +13,7 @@ export const cartTools = [
     needsAuth: true,
     schema: z.object({ sessionId }).strict(),
     async handle(_a, ctx) {
-      const r = await api.getCart(ctx.cookies);
+      const r = await api.getCart(WILLYS, ctx.cookies);
       return respond(r, (d) =>
         compact({
           antal: d.items,
@@ -42,7 +43,7 @@ export const cartTools = [
       })
       .strict(),
     async handle(a, ctx) {
-      const r = await api.addToCart(ctx.cookies, a.productCode, a.quantity);
+      const r = await api.addToCart(WILLYS, ctx.cookies, a.productCode, a.quantity);
       return respond(r, (d) => `Lade ${d.quantity} st ${d.added} i kundvagnen.`);
     },
   }),
@@ -53,7 +54,7 @@ export const cartTools = [
     needsAuth: true,
     schema: z.object({ sessionId, productCode }).strict(),
     async handle(a, ctx) {
-      const r = await api.removeFromCart(ctx.cookies, a.productCode);
+      const r = await api.removeFromCart(WILLYS, ctx.cookies, a.productCode);
       return respond(r, (d) => `Tog bort ${d.removed} ur kundvagnen.`);
     },
   }),

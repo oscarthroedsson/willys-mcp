@@ -1,4 +1,4 @@
-import { err, ok, type Result } from "../core/result.js";
+import { err, ok, type Result } from "../../core/result.js";
 
 /**
  * Minimal surface of a Zod schema, so the upstream modules do not each need to

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { TOOL } from "../src/constants/index.js";
 
 /**
  * End-to-end smoke test over real stdio JSON-RPC.
@@ -93,7 +94,10 @@ async function main() {
   const tools: string[] = (list?.result?.tools ?? []).map(
     (t: { name: string }) => t.name,
   );
-  record("tools/list", tools.length === 19, `${tools.length} verktyg`);
+  // Compared against the declared names, not a literal: the literal (19) went
+  // stale the moment a tool was added and the check failed for months.
+  const declared = Object.keys(TOOL).length;
+  record("tools/list", tools.length === declared, `${tools.length} av ${declared} verktyg`);
   record(
     "checkout saknas (får ej finnas)",
     !tools.some((t) => t.includes("checkout")),
