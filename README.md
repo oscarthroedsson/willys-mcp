@@ -4,15 +4,15 @@
 
 <h1>willys-mcp</h1>
 
-**Ge Claude dina recept. Få rätt varor, i rätt mängd, i din kundvagn.**
+**Ge Claude dina recept. Få rätt varor, i rätt mängd, i din kundvagn — och veta var det är billigast.**
 
-En MCP-server som gör svensk matplanering till något du delegerar i stället för
-något du gör.
+En MCP-server för Willys, Hemköp, Coop, City Gross och Mathem som gör svensk
+matplanering till något du delegerar i stället för något du gör.
 
 <br>
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![Node](https://img.shields.io/badge/Node-%E2%89%A520-339933?style=flat-square&logo=nodedotjs&logoColor=white)
+![Node](https://img.shields.io/badge/Node-%E2%89%A520-663399?style=flat-square&logo=nodedotjs&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-stdio-1f6feb?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-black?style=flat-square)
 
@@ -22,12 +22,26 @@ något du gör.
 
 ## Vad det här är
 
-Willys har inget publikt API. Den här servern kartlägger deras faktiska
-endpoints, loggar in som du, och exponerar alltihop som MCP-verktyg — sökning,
-jämförprisrankning, kundvagn, orderhistorik och butiksregister.
+Ingen av de svenska matkedjorna har ett publikt API. Den här servern kartlägger
+deras faktiska endpoints och exponerar dem som MCP-verktyg — sökning,
+jämförprisrankning, prisjämförelse mellan kedjor, butiksregister, och för Willys
+även inloggning, kundvagn och orderhistorik.
 
 Men det intressanta ligger ovanpå: **kundvagnen behandlas som en projektion av
-vad dina recept kräver.** Inte som en hög varor någon lagt i en gång.
+vad dina recept kräver.** Inte som en hög varor någon lagt i en gång. Och samma
+plan kan prissättas i alla fem kedjor.
+
+| Kedja | Sök & pris | Butik | Kundvagn & ordrar |
+| --- | --- | --- | --- |
+| Willys | ✅ | valfri, samma pris i hela landet | ✅ |
+| Hemköp | ✅ | valfri, priser per butik | — |
+| Coop | ✅ | **krävs**, välj via postnummer | — |
+| City Gross | ✅ | valfri, smalnar av sortimentet | — |
+| Mathem | ✅ | finns inte, en nationell prislista | — |
+
+ICA stöds inte: deras API ligger bakom ett botskydd som tillåter ungefär fem
+anrop per fem minuter, för lite för att planera en korg. Detaljer per kedja:
+**[docs/kedjor.md](docs/kedjor.md)**.
 
 <br>
 
@@ -50,6 +64,14 @@ vad dina recept kräver.** Inte som en hög varor någon lagt i en gång.
 
 Servern har **inget kassaverktyg**. Den kan fylla kundvagnen men aldrig lägga en
 order. Det sista klicket är alltid ditt.
+
+> **Du:** Vad kostar pastan i de andra kedjorna?
+>
+> **Claude:** *(samma plan prissatt i fem kedjor, inget ändras)*
+> Willys 61,30 kr · Coop Bäckebol 64,40 kr · Hemköp 69,35 kr · Mathem 70,10 kr ·
+> City Gross 89,85 kr. Willys är billigast med 3,10 kr till Coop.
+
+<sub>Riktiga priser från 2026-10-14: 500 g köttfärs, 400 g krossade tomater och 500 g spaghetti.</sub>
 
 <br>
 
@@ -116,35 +138,40 @@ alls, så det är gratis att köra om efter varje nytt recept.
 
 <table>
 <tr><th align="left">Planering</th><th align="left"></th></tr>
-<tr><td><code>willys_plan_add_recipe</code></td><td>Lägg ett recepts ingredienser i registret</td></tr>
-<tr><td><code>willys_plan_status</code></td><td>Föreslagen korg, kostnad, beslutslägen</td></tr>
-<tr><td><code>willys_plan_apply</code></td><td>Synka vagnen — <code>dryRun</code> som default</td></tr>
-<tr><td><code>willys_plan_remove_recipe</code></td><td>Ta bort ett recept, räkna om</td></tr>
-<tr><td><code>willys_plan_clear</code></td><td>Nollställ planen</td></tr>
+<tr><td><code>plan_add_recipe</code></td><td>Lägg ett recepts ingredienser i registret — kedjeoberoende</td></tr>
+<tr><td><code>plan_status</code></td><td>Föreslagen korg och kostnad i en kedja; <code>compareWith</code> prissätter samma plan i andra</td></tr>
+<tr><td><code>plan_apply</code></td><td>Synka vagnen — <code>dryRun</code> som default</td></tr>
+<tr><td><code>plan_set_ingredient</code> · <code>plan_remove_ingredient</code> · <code>plan_remove_recipe</code></td><td>Rätta en rad eller ett recept, räkna om</td></tr>
+<tr><td><code>plan_clear</code></td><td>Nollställ planen</td></tr>
 </table>
 
 <table>
 <tr><th align="left">Sök &amp; pris</th><th align="left"></th></tr>
-<tr><td><code>willys_find_cheapest</code></td><td>Rankar på jämförpris över <b>hela</b> träffmängden, serverside</td></tr>
-<tr><td><code>willys_search</code></td><td>Fritextsök i Willys relevansordning</td></tr>
-<tr><td><code>willys_search_suggestions</code></td><td>Autocomplete</td></tr>
-<tr><td><code>willys_get_product_detail</code></td><td>Näringsvärde, ingredienser, ursprung</td></tr>
-<tr><td><code>willys_get_campaigns</code></td><td>Butiksspecifika erbjudanden</td></tr>
+<tr><td><code>compare_prices</code></td><td>Samma vara i flera kedjor i ett anrop: billigast per kedja och totalt</td></tr>
+<tr><td><code>find_cheapest</code></td><td>Rankar på jämförpris över <b>hela</b> träffmängden i en kedja, serverside</td></tr>
+<tr><td><code>search</code></td><td>Fritextsök i kedjans relevansordning</td></tr>
+<tr><td><code>search_suggestions</code></td><td>Autocomplete</td></tr>
+<tr><td><code>get_product</code></td><td>Näringsvärde, ingredienser, ursprung</td></tr>
+<tr><td><code>get_campaigns</code></td><td>Butiksspecifika erbjudanden</td></tr>
 </table>
 
 <table>
 <tr><th align="left">Kundvagn &amp; konto</th><th align="left"></th></tr>
-<tr><td><code>willys_get_cart</code> · <code>willys_add_to_cart</code> · <code>willys_remove_from_cart</code></td><td>Kundvagn</td></tr>
-<tr><td><code>willys_get_orders</code> · <code>willys_get_order_details</code></td><td>Orderhistorik</td></tr>
-<tr><td><code>willys_get_frequent_products</code></td><td>Vanligaste varor, ur faktisk historik</td></tr>
-<tr><td><code>willys_login</code> · <code>willys_check_auth</code> · <code>willys_logout</code></td><td>Session, 24h</td></tr>
+<tr><td><code>get_cart</code> · <code>add_to_cart</code> · <code>remove_from_cart</code></td><td>Kundvagn (Willys)</td></tr>
+<tr><td><code>get_orders</code> · <code>get_order_details</code></td><td>Orderhistorik (Willys)</td></tr>
+<tr><td><code>get_frequent_products</code> · <code>get_customer_info</code></td><td>Vanligaste varor ur faktisk historik, kundprofil</td></tr>
+<tr><td><code>login</code> · <code>check_auth</code> · <code>logout</code></td><td>Session per kedja, 24h</td></tr>
 </table>
 
 <table>
 <tr><th align="left">Butik &amp; uppsättning</th><th align="left"></th></tr>
-<tr><td><code>willys_find_stores</code> · <code>willys_nearest_stores</code> · <code>willys_get_store</code></td><td>254 butiker, lokal cache, ingen session</td></tr>
-<tr><td><code>willys_setup</code> · <code>willys_setup_init</code></td><td>Guidad förstagångsuppsättning</td></tr>
+<tr><td><code>find_stores</code> · <code>get_store</code></td><td>Butiker på ort, postnummer eller koordinat; för Coop vilken butik som levererar till ditt postnummer</td></tr>
+<tr><td><code>setup</code> · <code>setup_init</code> · <code>open_file</code></td><td>Guidad förstagångsuppsättning</td></tr>
+<tr><td><code>read_doc</code> · <code>fetch_url</code> · <code>release_notes</code></td><td>Hjälp, recept från en länk, vad som ändrats sedan en version</td></tr>
 </table>
+
+Nästan alla verktyg tar `chain`. Claude frågar vilken kedja du handlar i om du
+inte sagt det — servern väljer aldrig åt dig.
 
 <br>
 
@@ -175,9 +202,11 @@ claude mcp add willys --env WILLYS_HOME=$HOME/.willys-mcp -- node /absolut/sökv
 }
 ```
 
-Sen skriver du bara **"hjälp mig komma igång med Willys"** i en chatt. Claude
-frågar vilken ort du handlar i, slår upp din butik, skapar konfigurationsfilen
-och öppnar den åt dig. Det enda du gör själv är att fylla i två rader.
+Sök, priser och jämförelser fungerar direkt, utan konto. För kundvagn och
+orderhistorik hos Willys skriver du **"hjälp mig komma igång med Willys"** i en
+chatt. Claude frågar vilken ort du handlar i, slår upp din butik, skapar
+konfigurationsfilen och öppnar den åt dig. Det enda du gör själv är att fylla i
+två rader.
 
 `WILLYS_HOME` styr var `.env` och sessionsdatabasen hamnar. Utan den ligger de i
 projektmappen, vilket är bekvämt i en checkout men gör att de följer med om
@@ -186,7 +215,7 @@ mappen någon gång byts ut.
 Fullständig guide: **[INSTALL.md](INSTALL.md)**
 
 > [!IMPORTANT]
-> Ditt Willys-konto måste ha ett **lösenord**. BankID går inte att automatisera —
+> För kundvagnen måste ditt Willys-konto ha ett **lösenord**. BankID går inte att automatisera —
 > servern loggar in genom att fylla i ett formulär. Har du bara använt BankID
 > måste du skapa ett lösenord först, och Claude förklarar hur.
 
@@ -208,13 +237,22 @@ src/
 ├── planner/
 │   ├── ledger.ts     behovsregister med härkomst per recept
 │   └── reconcile.ts  bygger korgen, diffar mot vagnen
-├── domain/           ren matte: volym, täckning, produktmodell, namnmatchning
-├── upstream/         HTTP-klienter mot Willys, en fil per resurs
+├── chains/           ChainAdapter-kontraktet, registret, delad rangordning och butiksregister
+├── domain/           ren matte: volym, täckning, produktmodell, namnmatchning, jämförpris
+├── upstream/         HTTP-klienter, en mapp per plattform, en fil per resurs
+│   ├── axfood/       Willys + Hemköp (samma API, två värdar)
+│   ├── coop/         API-nycklarna läses ur coop.se vid första anropet
+│   ├── citygross/
+│   └── mathem/
 ├── auth/             Puppeteer-inloggning, sessionslagring
 ├── net/              generisk URL-hämtare (fetch_url)
 ├── core/             http, result, logger, env
 └── constants/        endpoints, gränsvärden, instructions
 ```
+
+En adapter per *plattform*, inte per butik: Willys och Hemköp är samma
+Axfood-API, och skillnaden mellan dem är en bas-URL. Rangordning och filter
+ligger i `chains/` och gäller alla kedjor lika.
 
 `domain/` och `planner/ledger.ts` rör aldrig nätverket. Täckningsmatten och
 behovsregistret är rena funktioner mot SQLite — vilket är varför de har riktiga
@@ -227,7 +265,7 @@ tester som kör på under en sekund utan att logga in någonstans.
 Fem beslut som formar resten av kodbasen.
 
 **Servern gissar aldrig tyst.** Filtreras varor bort står det hur många och
-varför. Matchar en kategorifacett ingenting görs om­försök utan den och svaret
+varför — djurmat, fel namn, ej köpbara. Matchar en kategorifacett ingenting görs om­försök utan den och svaret
 säger vilka facetter som faktiskt finns. Ett tyst nollresultat är värre än ett
 fel — det ser ut som att hyllan är tom.
 
@@ -237,7 +275,7 @@ tomat`: det blir en konflikt att lösa, inte en påhittad omräkning.
 
 **Farliga tillstånd görs omöjliga i protokollet.** Det finns inget kassaverktyg,
 så servern *kan* inte beställa. `plan_apply` har `dryRun: true` som default.
-`willys_setup_init` tar inte emot lösenord som argument — inte som en regel
+`setup_init` tar inte emot lösenord som argument — inte som en regel
 modellen ska följa, utan för att schemat vägrar. Det är starkare än att skriva
 "gör inte så".
 
@@ -247,8 +285,13 @@ dispatch. Utan det går en påhittad `quantity` rakt in i kundvagnen, och för
 `add_to_cart` betyder det riktiga varor.
 
 **Fel bär en klass hela vägen ut.** `AUTH_EXPIRED`, `SHAPE`, `NOT_FOUND`,
-`SETUP_REQUIRED`, `UPSTREAM`. Modellen kan skilja "sessionen dog" från "Willys
+`SETUP_REQUIRED`, `UPSTREAM`. Modellen kan skilja "sessionen dog" från "kedjan
 ligger nere" från "en människa måste redigera en fil", och agera olika på varje.
+
+**Servern rangordnar själv.** Bara Axfood sorterar rätt på jämförpris. City
+Gross ignorerar kampanjpris, Mathem kan inte sortera alls, och Coop har
+jämförpriser som är fel med en faktor tusen. Servern hämtar hela träffmängden,
+kontrollerar jämförpriset mot pris ÷ förpackning och sorterar.
 
 <br>
 
@@ -269,6 +312,12 @@ Dokumenterade i koden, med datum, så ingen återinför dem.
 - Kundvagnen har ingen delete-endpoint. Borttagning är en add med `quantity: 0`.
 - Varje endpoint som innehåller ett Next.js build-id är en tidsinställd bomb.
   Tre är redan döda och ligger kvar i `DEAD_ENDPOINTS` som varning.
+- "köttfärs" hos Coop rankade kattmat först. Den var billigast av allt med kött.
+- City Gross `totalCount` räknar recept som träffar: "köttfärs" ger 101 träffar
+  och 9 produkter.
+- Coop-sök mot en butik utan e-handel ger noll träffar, inte ett fel.
+- City Gross produktkoder är Axfoods: samma kod är samma vara hos Willys, Hemköp
+  och City Gross.
 
 <br>
 
@@ -278,6 +327,8 @@ Dokumenterade i koden, med datum, så ingen återinför dem.
 - **Fungerar inte i claude.ai i webbläsaren.** En webbsida kan inte starta
   program på din dator. Claude Desktop eller Claude Code.
 - **Stödjer inte BankID.**
+- **Stödjer inte ICA.**
+- **Har ingen kundvagn för Hemköp, Coop, City Gross eller Mathem än.**
 - **Är inte officiell.** Endpoints är kartlagda mot produktion och kan sluta
   fungera utan förvarning.
 
@@ -290,19 +341,23 @@ npm run typecheck      # enda verkliga porten före commit
 npm run test:coverage  # täckningsmatte, inget nätverk
 npm run test:planner   # behovsregister, inget nätverk
 npm run test:volume    # 44 verkliga förpackningsformat
+npm run test:chains    # mappning per kedja, rangordning, djurmat, jämförpriskontroll
+npm run test:coop      # Coops nyckelhämtning och rotation, med stubbad fetch
+npm run test:releases  # release notes och tombstones för gamla verktygsnamn
 npm run smoke          # end-to-end över stdio, kräver session
 ```
 
 Konventioner och fallgropar för framtida ändringar: **[CLAUDE.md](CLAUDE.md)**
-Endpoint-kartläggning: **[docs/endpoints.md](docs/endpoints.md)**
+Endpoint-kartläggning: **[docs/kedjor.md](docs/kedjor.md)** · Willys i detalj: **[docs/endpoints.md](docs/endpoints.md)**
+Ändringar per version: **[docs/CHANGELOG.md](docs/CHANGELOG.md)** — AI-klienter läser samma fil via `release_notes`.
 
 <br>
 
 ## Förbehåll
 
-Ett privat verktyg som automatiserar ett konto du själv äger. Respektera Willys
-användarvillkor, kör det inte mot konton du inte förfogar över, och undvik
-anropsvolymer som liknar skrapning.
+Ett privat verktyg som automatiserar ett konto du själv äger och läser publika
+priser. Respektera kedjornas användarvillkor, kör det inte mot konton du inte
+förfogar över, och undvik anropsvolymer som liknar skrapning.
 
 <br>
 
