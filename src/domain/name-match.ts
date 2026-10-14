@@ -48,7 +48,52 @@ export function looselyRelates(name: string, query: string): boolean {
   if (qWords.length === 0) return true;
   const nWords = words(name).filter((w) => w.length >= 4);
   return qWords.some((q) =>
-    nWords.some((n) => n.includes(q) || q.includes(n)),
+    nWords.some((n) => n.includes(q) || q.includes(n) || sameHead(q, n)),
+  );
+}
+
+/** Shortest shared ending that counts as a shared head noun. */
+const MIN_HEAD = 4;
+
+/**
+ * Two compounds with the same head noun: "köttfärs" and "nötfärs" both end in
+ * "färs". Swedish puts the head last, so a shared ending of a whole morpheme is
+ * the same kind of thing — without it, cheapest "köttfärs" threw away Nötfärs,
+ * Blandfärs and Fläskfärs (35 of 37 hits at Willys, 17 of 17 at Coop) and
+ * kept only a pie. Loose on purpose: this guards against junk ("tamponger" for
+ * "mineralvatten"), not against near-misses, which category and mustContain
+ * handle.
+ */
+export function sameHead(a: string, b: string): boolean {
+  let i = 0;
+  while (i < a.length && i < b.length && a[a.length - 1 - i] === b[b.length - 1 - i]) i++;
+  return i >= MIN_HEAD;
+}
+
+/**
+ * Pet food, recognised by category when the chain states one and by name
+ * otherwise. "köttfärs" at Coop ranked cat food first (40,79 kr/kg) — it is the
+ * cheapest meat-containing thing, and the wrong one.
+ */
+const PET_CATEGORY = /djur|husdjur/i;
+const PET_WORDS = new Set([
+  "katt", "hund", "valp", "kattunge", "kattmat", "hundmat", "djurmat",
+  "foder", "kattsand", "fågelfrö", "hundben",
+]);
+const PET_PREFIX = /^(katt|hund|valp)/;
+const PET_SUFFIX = /(mat|godis|snacks?|ben|foder|tugg\w*|bitar)$/;
+const PET_QUERY = /katt|hund|valp|djur|foder|fågelfrö|husdjur/i;
+
+/** True when the product is pet food and the query is not about pets. */
+export function isUnwantedPetFood(
+  p: { name: string; category?: string | null | undefined },
+  query: string,
+): boolean {
+  if (PET_QUERY.test(query)) return false;
+  if (p.category && PET_CATEGORY.test(p.category)) return true;
+  // Word-based, not \b-regex: JavaScript's \b treats å, ä and ö as non-letters.
+  return words(p.name).some(
+    (w) => PET_WORDS.has(w) || (PET_PREFIX.test(w) && PET_SUFFIX.test(w)) || w.startsWith("hundtugg"),
   );
 }
 

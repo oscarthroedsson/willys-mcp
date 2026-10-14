@@ -7,10 +7,12 @@ import {
   type PackageMath,
 } from "../domain/volume.js";
 import {
+  isUnwantedPetFood,
   looselyRelates,
   nameContainsTerm,
   nameHasSubstring,
 } from "../domain/name-match.js";
+import { vetUnitPrice, type UnitPriceSource } from "../domain/unit-price.js";
 import type { AdapterCtx, CategoryOption, ChainAdapter } from "./types.js";
 
 /**
@@ -60,6 +62,8 @@ export interface CheapestOptions {
 }
 
 export interface RankedProduct extends Product {
+  /** Whether perUnit is upstream's, our own (upstream disagreed), or unverifiable. */
+  perUnitSource: UnitPriceSource;
   packaging: PackageMath | null;
   /** What covering `need` with this product actually costs. */
   estimatedCost: number | null;
@@ -79,6 +83,7 @@ export interface CheapestResult {
     noPrice: number;
     irrelevantName: number;
     excludedWord: number;
+    petFood: number;
   };
   products: RankedProduct[];
   /** Set when the cheapest per-unit option is not the cheapest way to cover `need`. */
@@ -88,6 +93,7 @@ export interface CheapestResult {
 /**
  * Cheapest per unit first; products without a comparable price last, in the
  * order they arrived. Stable, so equal prices keep upstream relevance order.
+ * Only meaningful within one compare unit — see rankByUnit for mixed sets.
  */
 export function byUnitPrice<T extends Pick<Product, "perUnit">>(a: T, b: T): number {
   if (a.perUnit === null && b.perUnit === null) return 0;
@@ -113,13 +119,17 @@ export function rankCandidates(
     noPrice: 0,
     irrelevantName: 0,
     excludedWord: 0,
+    petFood: 0,
   };
 
   const required = opts.mustContain ?? [];
   const forbidden = opts.mustNotContain ?? [];
 
-  const kept: Product[] = [];
-  for (const p of rows) {
+  const kept: Array<Product & { perUnitSource: UnitPriceSource }> = [];
+  for (const raw of rows) {
+    // Vet the comparison price first: a wrong upstream figure must neither
+    // rank a product first nor hide it.
+    const p = vetUnitPrice(raw);
     if (opts.onlyBuyable && !p.buyable) {
       filteredOut.notBuyable++;
       continue;
@@ -159,11 +169,17 @@ export function rankCandidates(
       filteredOut.excludedWord++;
       continue;
     }
+    if (isUnwantedPetFood(p, opts.query)) {
+      filteredOut.petFood++;
+      continue;
+    }
     kept.push(p);
   }
 
   // The server ranks, never the upstream order.
-  kept.sort(byUnitPrice);
+  const { ordered, mixedNote } = rankByUnit(kept);
+  kept.length = 0;
+  kept.push(...ordered);
 
   const need = opts.need ? parseRequirement(opts.need) : null;
 
@@ -183,7 +199,7 @@ export function rankCandidates(
   // With a concrete requirement, re-rank on what covering it actually costs.
   // The cheapest kr/kg can force buying far more than needed, so a slightly
   // dearer product in a smaller pack can win on real money.
-  let note: string | undefined;
+  let note: string | undefined = mixedNote;
   if (need) {
     const withCost = ranked.filter((p) => p.estimatedCost !== null);
     if (withCost.length > 0) {
@@ -192,7 +208,8 @@ export function rankCandidates(
       if (cheapestPerUnit && withCost[0]?.code !== cheapestPerUnit.code) {
         note =
           "Rangordnat på total kostnad för behovet, inte på jämförpris. " +
-          `Billigast per enhet (${cheapestPerUnit.name}) kräver mer förpackning än du behöver.`;
+          `Billigast per enhet (${cheapestPerUnit.name}) kräver mer förpackning än du behöver.` +
+          (mixedNote ? ` ${mixedNote}` : "");
       }
       const rest = ranked.filter((p) => p.estimatedCost === null);
       ranked.length = 0;
@@ -201,6 +218,36 @@ export function rankCandidates(
   }
 
   return note ? { filteredOut, products: ranked, note } : { filteredOut, products: ranked };
+}
+
+/**
+ * Rank by unit price within the dominant compare unit, others after.
+ *
+ * kr/kg and kr/st are not comparable: a 10 kr/st egg is not cheaper than
+ * 60 kr/kg mince in any useful sense. The unit most products share comes
+ * first, ranked; the rest follow, ranked among themselves, and the caller is
+ * told so instead of reading one list as if it were one scale.
+ */
+export function rankByUnit<T extends Pick<Product, "perUnit" | "compareUnit">>(
+  items: T[],
+): { ordered: T[]; mixedNote?: string } {
+  const counts = new Map<string, number>();
+  for (const p of items) {
+    if (p.perUnit !== null && p.compareUnit) {
+      counts.set(p.compareUnit, (counts.get(p.compareUnit) ?? 0) + 1);
+    }
+  }
+  if (counts.size <= 1) return { ordered: [...items].sort(byUnitPrice) };
+
+  const primary = [...counts].sort((a, b) => b[1] - a[1])[0]![0];
+  const first = items.filter((p) => p.compareUnit === primary).sort(byUnitPrice);
+  const rest = items.filter((p) => p.compareUnit !== primary).sort(byUnitPrice);
+  return {
+    ordered: [...first, ...rest],
+    mixedNote:
+      `Träffarna har olika jämförenheter (${[...counts.keys()].join(", ")}). ` +
+      `Rangordnat på kr/${primary} först; övriga enheter efter, eftersom de inte är jämförbara.`,
+  };
 }
 
 export async function findCheapest(

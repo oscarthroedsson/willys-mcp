@@ -117,14 +117,19 @@ export function toCoopProduct(item: CoopItem): Product | null {
     ? (price(promo.comparativePrice) ?? price(item.comparativePriceData))
     : price(item.comparativePriceData);
 
-  // For weighed goods a promotion is stated per kg like the list price, so the
-  // piece price scales with it.
+  // Weighed goods: the piece is kr/kg × its nominal weight. Computed rather
+  // than read from piecePriceData, which is sometimes the kg price itself
+  // (Saltrulle Kokt: 306,64 kr for a ~100 g piece). Where Coop gets it right
+  // the two agree (paprika: 59,90 × 0,2 = 11,98 = piecePriceData).
+  const perKg = promoPrice ?? listPrice;
+  const grams =
+    weighed && typeof item.packageSize === "number" && /gram/i.test(item.packageSizeUnit ?? "")
+      ? item.packageSize
+      : null;
   const packagePrice =
-    promoPrice !== null && listPrice
-      ? weighed && piece !== null
-        ? Number(((piece * promoPrice) / listPrice).toFixed(2))
-        : promoPrice
-      : piece;
+    weighed && perKg !== null && grams
+      ? Number(((perKg * grams) / 1000).toFixed(2))
+      : (promoPrice ?? piece);
 
   const unitKey = (item.comparativePriceUnit?.unit ?? "").toLowerCase();
   const compareUnit = COMPARE_UNIT[unitKey] ?? null;

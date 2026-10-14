@@ -51,10 +51,21 @@ att verktygsnamn, parametrar eller svarsformat du minns kan vara fel. Läs då
 - `willys_find_cheapest` rangordnar på jämförpris i servern i stället för att
   lita på Willys sortering. Resultatet blir detsamma för Willys.
 
+- `willys_find_cheapest`: jämförpriset kontrolleras mot pris ÷ förpackning. Avviker
+  uppströms värde mer än en faktor 3 används det beräknade, och varje produkt
+  har `perUnitSource` (`uppstroms`, `beraknat` eller `okontrollerat`).
+- `willys_find_cheapest`: har träffarna olika jämförenheter (kr/kg och kr/l)
+  rangordnas den vanligaste enheten först, och svaret säger det i `notering`.
+
 ### Fixat
 
 - `willys_find_stores` hittar butiker på postnummer skrivet utan mellanslag
   (`82231` matchar `822 31`).
+- `willys_find_cheapest` slängde Nötfärs, Blandfärs och Fläskfärs för
+  "köttfärs" (35 av 37 träffar) eftersom namnen inte innehöll ordet. Sammansatta
+  ord med samma efterled räknas nu som relaterade.
+- `willys_find_cheapest` sorterar bort djurmat när frågan inte gäller djur
+  (`bortfiltrerade.petFood`).
 
 ## [1.0.0] - 2026-07-31
 

@@ -1,6 +1,8 @@
 import { displayVolume, toCgProduct } from "../src/upstream/citygross/map.js";
 import { splitNameExtra, toMathemProduct } from "../src/upstream/mathem/map.js";
-import { byUnitPrice, rankCandidates } from "../src/chains/cheapest.js";
+import { byUnitPrice, rankByUnit, rankCandidates } from "../src/chains/cheapest.js";
+import { isUnwantedPetFood, looselyRelates, sameHead } from "../src/domain/name-match.js";
+import { vetUnitPrice } from "../src/domain/unit-price.js";
 import { allAdapters } from "../src/chains/registry.js";
 import { CHAIN_IDS } from "../src/chains/types.js";
 import { parseVolume } from "../src/domain/volume.js";
@@ -72,6 +74,34 @@ const ranked = rankCandidates([p("mjölk dyr", 15), p("mjölk okänd", null), p(
 });
 check("servern sorterar på jämförpris", ranked.products.map((x) => x.name).join(",") === "mjölk billig,mjölk dyr,mjölk okänd");
 check("byUnitPrice lägger null sist", [p("a", null), p("b", 1)].sort(byUnitPrice)[0]!.name === "b");
+
+// ── #44: relevance ──
+check("köttfärs ~ Nötfärs (samma efterled)", looselyRelates("Nötfärs 12%", "köttfärs"));
+check("köttfärs ~ Blandfärs", looselyRelates("Blandfärs 50/50", "köttfärs"));
+check("sameHead kräver minst 4 tecken", !sameHead("kaffe", "tofe"));
+check("tamponger relaterar fortfarande inte", !looselyRelates("Mini Tamponger", "mineralvatten naturell"));
+check("kattmat i djurkategori sorteras bort", isUnwantedPetFood({ name: "Nötfärs i gelé", category: "Djurmat & Tillbehör" }, "köttfärs"));
+check("hundtugg på namn sorteras bort", isUnwantedPetFood({ name: "Torkad Grisöra Hundtugg" }, "torkad dragon"));
+check("Kattmat Nötfärs på namn", isUnwantedPetFood({ name: "Kattmat Kastrerad Nötfärs" }, "köttfärs"));
+check("frågan gäller djur → behålls", !isUnwantedPetFood({ name: "Kattmat Lax", category: "Djurmat" }, "kattmat"));
+check("vanlig färs behålls", !isUnwantedPetFood({ name: "Nötfärs 12%", category: "Kött, Fågel & Chark" }, "köttfärs"));
+
+// ── #43: sanity ──
+const coopBug = vetUnitPrice({ ...p("Nötfärs 12%", 0.2), packagePrice: 199, unit: "1000g" });
+check("Coop-felet 0,20 kr/kg ersätts av 199", coopBug.perUnit === 199 && coopBug.perUnitSource === "beraknat", String(coopBug.perUnit));
+const fine = vetUnitPrice({ ...p("Mjölk", 11.3), packagePrice: 16.95, unit: "1,5l", compareUnit: "l" });
+check("rimligt uppströmsvärde behålls", fine.perUnit === 11.3 && fine.perUnitSource === "uppstroms");
+const unknown = vetUnitPrice({ ...p("Ägg", 3.5), unit: null });
+check("utan förpackning: okontrollerat", unknown.perUnitSource === "okontrollerat" && unknown.perUnit === 3.5);
+
+// ── #42: mixed units ──
+const mixed = rankByUnit([
+  { ...p("ägg", 3), compareUnit: "st" },
+  { ...p("färs dyr", 120), compareUnit: "kg" },
+  { ...p("färs billig", 80), compareUnit: "kg" },
+]);
+check("vanligaste enheten först", mixed.ordered.map((x) => x.name).join(",") === "färs billig,färs dyr,ägg");
+check("blandade enheter ger notering", Boolean(mixed.mixedNote));
 
 console.log(failures === 0 ? "ALLA TESTER GRÖNA" : `${failures} FEL`);
 process.exit(failures === 0 ? 0 : 1);

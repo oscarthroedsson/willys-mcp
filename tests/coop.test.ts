@@ -89,6 +89,15 @@ check("viktvara: packagePrice är styckpriset", p.packagePrice === 11.98);
 check("viktvara: unit 'ca: 200g'", p.unit === "ca: 200g");
 check("toppkategori ur navigeringen", p.category === "Frukt & Grönsaker");
 
+// piecePriceData sometimes IS the kg price (Saltrulle Kokt, 2026-10-14).
+const saltrulle = toCoopProduct({
+  ean: "2097224300007", name: "Saltrulle Kokt", salesUnit: "Vikt", packageSize: 100,
+  packageSizeUnit: "gram ungefärlig vikt", salesPriceData: { b2cPrice: 306.64 },
+  piecePriceData: { b2cPrice: 306.64 }, comparativePriceData: { b2cPrice: 306.64 },
+  comparativePriceUnit: { unit: "kg" },
+})!;
+check("viktvara: bitpris räknas, litar inte på piecePriceData", saltrulle.packagePrice === 30.66, String(saltrulle.packagePrice));
+
 const multibuy = toCoopProduct({
   ean: "1", name: "Nötfärs Eko", salesUnit: "Styck", packageSize: 500, packageSizeUnit: "Gram",
   piecePriceData: { b2cPrice: 93 }, comparativePriceData: { b2cPrice: 186 },
