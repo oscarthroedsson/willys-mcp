@@ -40,6 +40,7 @@
     "test:coverage": "tsx tests/coverage.test.ts",
     "test:planner": "tsx tests/planner.test.ts",
     "test:category": "tsx tests/category.test.ts",
+    "test:coop": "tsx tests/coop.test.ts",
     "kandidater": "tsx scripts/kandidater.ts",
     "veckohandla": "tsx scripts/veckohandla.ts"
   },

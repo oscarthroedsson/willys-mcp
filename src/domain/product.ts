@@ -40,6 +40,12 @@ export interface Product {
   onSale: boolean;
   saving: number | null;
   buyable: boolean;
+  /**
+   * Top-level category when the chain states it per product (Coop, City Gross).
+   * Lets the shared filter drop pet food from "köttfärs" without guessing from
+   * the name. Absent for Axfood search hits, which carry no category.
+   */
+  category?: string | null;
 }
 
 function toNumber(v: unknown): number | null {

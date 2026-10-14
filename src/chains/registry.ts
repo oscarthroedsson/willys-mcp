@@ -1,14 +1,16 @@
 import { hemkop, willys } from "./axfood.js";
+import { coopAdapter } from "./coop.js";
 import type { Capability, ChainAdapter, ChainId } from "./types.js";
 
 /**
  * ChainId → adapter. The one place a new chain is wired in.
  *
- * Coop, City Gross and Mathem join here as their adapters land (epic 3–4).
+ * City Gross and Mathem join here as their adapters land (epic 4).
  */
 const ADAPTERS: Partial<Record<ChainId, ChainAdapter>> = {
   willys,
   hemkop,
+  coop: coopAdapter,
 };
 
 export function getAdapter(chain: ChainId): ChainAdapter | null {

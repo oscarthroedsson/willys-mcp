@@ -106,3 +106,18 @@ export const DEAD_ENDPOINTS = {
    */
   storeGeoSearch: `${BASE}/axfood/rest/search/store`,
 } as const;
+
+/**
+ * Coop: Hybris for e-commerce and stores-by-postcode, Loop54 behind
+ * "personalization" for search, and a separate store API. All three sit behind
+ * Azure APIM and need the subscription keys read from coop.se (see
+ * upstream/coop/keys.ts). Mapped 2026-10-13, see docs/kedjor.md.
+ */
+export const COOP = {
+  keyPage: "https://www.coop.se/",
+  personalization: "https://external.api.coop.se/personalization",
+  hybris: "https://external.api.coop.se/ecommerce/coop",
+  store: "https://proxy.api.coop.se/external/store",
+  /** The query string every personalization call carries besides `store`. */
+  searchParams: "api-version=v2&groups=CUSTOMER_PRIVATE&device=desktop&direct=false",
+} as const;

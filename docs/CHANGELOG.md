@@ -37,8 +37,9 @@ att verktygsnamn, parametrar eller svarsformat du minns kan vara fel. Läs då
 - Borttagna verktyg svarar med sin ersättning i stället för "Okänt verktyg"
   (`RETIRED_TOOLS`).
 - Internt: en adapter per kedja (`src/chains/`). Willys och Hemköp delar en
-  Axfood-adapter. Hemköp är inte nåbart via verktygen än; det kommer med
-  `chain`-parametern.
+  Axfood-adapter, och Coop har en egen (sök, produkt per EAN, erbjudanden,
+  autocomplete, e-handelsbutiker via postnummer). Hemköp och Coop är inte
+  nåbara via verktygen än; det kommer med `chain`-parametern.
 
 ### Ändrat
 

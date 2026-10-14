@@ -142,6 +142,15 @@ Sökträffarna innehåller redan ingredienser (`listOfIngredients`), näringsvä
 (`nutrientInformation`), jämförpris (`comparativePriceData.b2cPrice`) och enhet.
 En separat produktdetalj behövs sällan.
 
+**Prismappning** (verifierad 2026-10-14): `salesUnit: "Styck"` betyder att
+`piecePriceData` är förpackningspriset. `salesUnit: "Vikt"` betyder att
+`salesPriceData` är kr/kg och `piecePriceData` det uppskattade priset för en bit
+på cirka `packageSize` gram (paprika 59,90 kr/kg och 11,98 kr för ~200 g).
+`onlinePromotions` av typen `MULTI_BUY_FIXED_PRICE` ("2 för 177") kräver flera
+förpackningar och är **inte** aktuellt pris; inte heller `medMeraRequired: true`.
+Näringsvärdenas bas står i `nutrientInformation[0].header`
+(`nutrientBasisQuantity` + `nutrientBasisQuantityUnit.value`).
+
 ### Butiker
 
 | Rutt | Nyckel | Anteckning |
@@ -149,6 +158,7 @@ En separat produktdetalj behövs sällan.
 | `GET https://proxy.api.coop.se/external/store/stores?api-version=v2` | `storeApiSubscriptionKey` | 787 butiker: `storeId`, `ledgerAccountNumber`, `conceptName` |
 | `GET …/external/store/stores/{ledger}?api-version=v2` | samma | Adress, lat/lng, öppettider. Kräver 6-siffrigt **ledger**, inte `storeId` |
 | `GET https://external.api.coop.se/ecommerce/coop/coopstore?postCode=41301&fields=BASIC&api-version=v1` | `hybrisApiSubscriptionKey` | **Postnummer → e-handelsbutik** (`252500` Stora Coop Bäckebol) |
+| `GET https://external.api.coop.se/ecommerce/coop/pointofservices?query=&pageSize=500&fields=FULL&api-version=v1` | `hybrisApiSubscriptionKey` | **Alla 250 e-handelsbutiker** med ledger-nummer i `name`, adress och koordinater (2026-10-14). Adaptern använder detta som register |
 
 **Fallgrop:** sök med en vanlig butiks ledger ger 0 träffar. Bara e-handelsbutiker
 har sortiment, så rätt väg är postnummer → `coopstore` → `store=`. Priserna
