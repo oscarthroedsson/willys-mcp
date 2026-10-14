@@ -9,15 +9,16 @@ import {
 import { log } from "./core/logger.js";
 import { SERVER_INFO, SERVER_INSTRUCTIONS } from "./constants/index.js";
 import { dispatch, toolManifest } from "./tools/registry.js";
+import { PACKAGE_VERSION, versionInstructions } from "./releases.js";
 
 // `instructions` rides along in the SDK's own initialize response. The Protocol
 // class owns that method, so this is the supported way to reach the payload —
 // registering an InitializeRequestSchema handler here would collide with it.
 const server = new Server(
-  { name: SERVER_INFO.name, version: SERVER_INFO.version },
+  { name: SERVER_INFO.name, version: PACKAGE_VERSION },
   {
     capabilities: { tools: {} },
-    instructions: SERVER_INSTRUCTIONS,
+    instructions: SERVER_INSTRUCTIONS + versionInstructions(),
   },
 );
 

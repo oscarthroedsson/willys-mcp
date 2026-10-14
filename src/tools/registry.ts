@@ -1,6 +1,6 @@
 import { getCookies } from "../auth/session.js";
 import { log } from "../core/logger.js";
-import { TOOL, type ToolName } from "../constants/index.js";
+import { RETIRED_TOOLS, TOOL, type ToolName } from "../constants/index.js";
 import { jsonSchema } from "./json-schema.js";
 import { failure, type AnyTool, type ToolResponse } from "./kit.js";
 import { cartTools } from "./cart-tools.js";
@@ -59,7 +59,21 @@ export async function dispatch(
   rawArgs: unknown,
 ): Promise<ToolResponse> {
   const tool = BY_NAME.get(name as ToolName);
-  if (!tool) return failure(`Okänt verktyg: ${name}`);
+  if (!tool) {
+    const retired = RETIRED_TOOLS[name];
+    if (retired) {
+      const instead = retired.replacement
+        ? `Använd ${retired.replacement} i stället.`
+        : "Det finns ingen direkt ersättning.";
+      return failure(
+        `Verktyget ${name} togs bort i version ${retired.since}. ${instead} ` +
+          `${retired.note} (INPUT) — se willys_release_notes med since före ${retired.since}.`,
+      );
+    }
+    return failure(
+      `Okänt verktyg: ${name}. Minns du det från en äldre version, kör willys_release_notes. (INPUT)`,
+    );
+  }
 
   // Enforcement, not documentation. The SDK does not validate for us.
   const parsed = tool.schema.safeParse(rawArgs ?? {});

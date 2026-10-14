@@ -3,6 +3,7 @@ import { TOOL } from "../constants/index.js";
 import { compact } from "../mappers/prune.js";
 import { readDoc, DOCS } from "../docs.js";
 import { fetchUrl } from "../net/fetch-url.js";
+import { PACKAGE_VERSION, releasesSince } from "../releases.js";
 import {
   initEnvFile,
   inspectSetup,
@@ -34,6 +35,47 @@ export const setupTools = [
       .strict(),
     handle(a) {
       return respond(readDoc(a.path), (doc) => doc);
+    },
+  }),
+
+  defineTool({
+    name: TOOL.releaseNotes,
+    description:
+      "Vad har ändrats i servern sedan en viss version? Anropa med since = den " +
+      "version du senast kände till innan du litar på verktygsnamn eller " +
+      "parametrar du minns — efter en brytande version kan de vara borttagna " +
+      "eller omdöpta. Svaret innehåller bara nyare versioner; brytande ändringar " +
+      "har en migreringssektion med gammalt → nytt anrop. Utan since: de tre senaste.",
+    needsAuth: false,
+    schema: z
+      .object({
+        since: z
+          .string()
+          .regex(/^\d+\.\d+\.\d+$/)
+          .optional()
+          .describe(
+            'Versionen du senast kände till, t.ex. "1.0.0". Utelämna om du inte vet.',
+          ),
+      })
+      .strict(),
+    handle(a) {
+      return respond(releasesSince(a.since), (releases) =>
+        compact({
+          aktuell_version: PACKAGE_VERSION,
+          ...(a.since ? { sedan: a.since } : {}),
+          ...(releases.length === 0
+            ? { status: "Inga ändringar sedan den versionen." }
+            : {
+                brytande: releases.filter((r) => r.breaking).map((r) => r.version),
+                versioner: releases.map((r) => ({
+                  version: r.version,
+                  datum: r.date,
+                  brytande: r.breaking,
+                  andringar: r.body,
+                })),
+              }),
+        }),
+      );
     },
   }),
 

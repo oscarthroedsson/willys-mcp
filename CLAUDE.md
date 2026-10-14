@@ -83,6 +83,19 @@ vad alternativen är, gissa inte.
 **Svar beskärs mot kontextbudget.** `mappers/prune.ts` finns för att uppströms
 skickar 45 KB där modellen behöver 2 KB. Returnera inte råa uppströmsobjekt.
 
+**Varje klientsynlig ändring går in i `docs/CHANGELOG.md` i samma commit.** Filen
+är källan för `willys_release_notes`. AI-klienter anropar det verktyget för att
+få veta vad som ändrats sedan versionen de minns. Reglerna (rubrikordning, vad som
+räknas som brytande) står överst i filen. Vid en brytande ändring: höj
+major-versionen, skriv `### Migrering` med före/efter-anrop och lägg varje borttaget
+eller omdöpt verktyg i `RETIRED_TOOLS` i `constants/tools.ts`. Där ska det ligga
+kvar minst en major-version. Versionen hårdkodas aldrig, den läses från
+`package.json` (`src/releases.ts`).
+
+**Release:** flytta `[Unreleased]` till `## [x.y.z] - ÅÅÅÅ-MM-DD`, höj `version` i
+`package.json`, tagga `vx.y.z` och skapa en GitHub Release med samma avsnitt som
+text (`gh release create vx.y.z --notes-file <avsnittet>`).
+
 ## Fallgropar som redan kostat tid
 
 - `sort=price:asc` rankar en portionsrätt på 16 kr över ett kilo köttfärs på

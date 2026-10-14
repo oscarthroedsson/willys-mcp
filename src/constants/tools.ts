@@ -8,6 +8,7 @@
  */
 export const TOOL = {
   readDoc: "willys_read_doc",
+  releaseNotes: "willys_release_notes",
   openFile: "willys_open_file",
   fetchUrl: "willys_fetch_url",
   setup: "willys_setup",
@@ -47,8 +48,22 @@ export const DEFAULT_PLAN_ID = "standard";
 
 export type ToolName = (typeof TOOL)[keyof typeof TOOL];
 
+/**
+ * Tools removed or renamed in a release, kept as tombstones.
+ *
+ * A model that learned the old surface will keep calling the old name. Without
+ * this it gets "Okänt verktyg" and has to guess; with it the dispatcher answers
+ * with the replacement and the version that changed it. Tombstones are never
+ * advertised in tools/list — they exist only to redirect a stale call. Keep an
+ * entry for at least one major version after the removal.
+ */
+export const RETIRED_TOOLS: Record<
+  string,
+  { replacement: string | null; since: string; note: string }
+> = {};
+
+/** The version is read from package.json at startup (src/releases.ts), never hardcoded here. */
 export const SERVER_INFO = {
   name: "willys-mcp",
-  version: "1.0.0",
   protocolVersion: "2024-11-05",
 } as const;

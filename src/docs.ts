@@ -26,6 +26,7 @@ export const DOCS: Record<string, string> = {
   "help/search.md": "sök- och prisverktygens parametrar och fällor",
   "help/planning.md": "receptplaneringsflödet i detalj",
   "help/errors.md": "vad varje felklass betyder och vad du gör",
+  "CHANGELOG.md": "versionshistorik och migrering vid brytande ändringar",
 };
 
 /**

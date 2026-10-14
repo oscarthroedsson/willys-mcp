@@ -96,5 +96,6 @@ gissa:
   read_doc("help/planning.md")  receptplanering i detalj
   read_doc("help/errors.md")    vad varje felklass betyder och vad du gör
   read_doc("help/security.md")  varför inloggning är säker att anropa
+  read_doc("CHANGELOG.md")      hela versionshistoriken (willys_release_notes ger bara det nya)
 
 Vid en oväntad felklass, börja med read_doc("help/errors.md").`;
