@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CHAIN_IDS } from "../chains/types.js";
 import {
   DEFAULT_PLAN_ID,
   PRODUCT_CODE_HINT,
@@ -15,10 +16,41 @@ import {
 
 export const sessionId = z
   .string()
-  .uuid("sessionId måste vara ett UUID från willys_login");
+  .uuid("sessionId måste vara ett UUID från login");
 
-/** Willys product codes look like 101175556_ST or 101253220_KG. */
+/** For tools where a session is optional: it makes the answer the user's own view. */
+export const optionalSessionId = sessionId
+  .optional()
+  .describe("Valfri session från login: svaret gäller då användarens egen butik.");
+
+/**
+ * Which chain. Required wherever the answer depends on it — the server never
+ * picks a chain for the user.
+ */
+export const chain = z
+  .enum(CHAIN_IDS)
+  .describe("Kedja. Fråga användaren om den inte framgått — välj aldrig åt dem.");
+
+/**
+ * A store id, validated per chain by the dispatcher. Willys/Hemköp 4 digits,
+ * Coop 6 (ledger), City Gross 4 (storeNumber).
+ */
+export const storeId = z
+  .string()
+  .regex(/^\d{3,6}$/, "butiks-id är 3–6 siffror")
+  .optional()
+  .describe("Butiks-id från find_stores, samma kedja. Krävs för Coop.");
+
+/** Any chain's product code; the adapter checks the chain-specific format. */
 export const productCode = z
+  .string()
+  .min(1)
+  .max(40)
+  .regex(/^[\w-]+$/, "produktkod får bara innehålla bokstäver, siffror, _ och -")
+  .describe("Produktkoden som search/find_cheapest gav för samma kedja.");
+
+/** Axfood product codes look like 101175556_ST or 101253220_KG — for the cart. */
+export const axfoodProductCode = z
   .string()
   .regex(PRODUCT_CODE_PATTERN, PRODUCT_CODE_HINT);
 
@@ -68,7 +100,7 @@ export const ingredient = z
       .max(60)
       .optional()
       .describe(
-        "Kategorifacett från willys_find_cheapest, t.ex. \"Mejeri\". Kraftigt " +
+        "Kategorifacett från find_cheapest, t.ex. \"Mejeri\". Kraftigt " +
           "rekommenderad för varor vars namn är tvetydigt.",
       ),
     requireSwedishMeat: z
@@ -102,7 +134,7 @@ export function surplusKeys(description: string) {
     .default([])
     .describe(
       `${description} Nyckeln är ingrediensens sökterm i gemener, som den står i ` +
-        'fältet nyckel i svaret från willys_plan_status. Skicka ["*"] för att ' +
+        'fältet nyckel i svaret från plan_status. Skicka ["*"] för att ' +
         "gälla alla rader — användbart när användaren sagt \"billigast\" generellt.",
     );
 }

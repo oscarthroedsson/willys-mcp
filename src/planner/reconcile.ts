@@ -11,10 +11,10 @@ import { parseVolume } from "../domain/volume.js";
 import { pieceWeight } from "../domain/piece-weights.js";
 import { matchesQuery, attributeConflict } from "../domain/name-match.js";
 import { verifySession } from "../auth/login.js";
-import { WILLYS } from "../constants/index.js";
+import type { AxfoodSite } from "../constants/index.js";
 import { addToCart, getCart, removeFromCart } from "../upstream/axfood/cart.js";
 import { findCheapest } from "../chains/cheapest.js";
-import { willys } from "../chains/axfood.js";
+import type { AdapterCtx, ChainAdapter, ChainId } from "../chains/types.js";
 import {
   listChoices,
   listNeeds,
@@ -78,6 +78,8 @@ export interface PlannedLine {
 
 export interface BuiltPlan {
   planId: string;
+  /** The chain the basket was priced in; choices and the cart belong to it. */
+  chain: ChainId;
   lines: PlannedLine[];
   conflicts: NeedConflict[];
   /** Sum of chosen strategies, for lines that resolved to a product. */
@@ -126,7 +128,8 @@ interface CandidateLookup {
 
 /** Willys ranks by compare price; we re-rank by what covering the need costs. */
 async function candidatesFor(
-  cookies: string,
+  adapter: ChainAdapter,
+  ctx: AdapterCtx,
   need: AggregatedNeed,
   limit: number,
 ): Promise<Result<CandidateLookup>> {
@@ -152,7 +155,7 @@ async function candidatesFor(
       brand: p.brand,
     }));
 
-  const first = await findCheapest(willys, { cookies }, {
+  const first = await findCheapest(adapter, ctx, {
     ...base,
     category: need.category ?? undefined,
   });
@@ -169,7 +172,7 @@ async function candidatesFor(
 
   // A category that filtered everything away is almost always wrong rather than
   // a genuinely empty shelf. Retry without it to learn the real facet list.
-  const retry = await findCheapest(willys, { cookies }, { ...base, category: undefined });
+  const retry = await findCheapest(adapter, ctx, { ...base, category: undefined });
   if (!retry.ok) return retry;
 
   const realFacets = retry.data.availableCategories.map((c) => c.name);
@@ -183,7 +186,7 @@ async function candidatesFor(
     (f) => normaliseFacet(f) === normaliseFacet(need.category!),
   );
   if (canonical && canonical !== need.category) {
-    const canon = await findCheapest(willys, { cookies }, { ...base, category: canonical });
+    const canon = await findCheapest(adapter, ctx, { ...base, category: canonical });
     if (canon.ok && canon.data.products.length > 0) {
       return ok({
         candidates: toCandidates(canon.data.products),
@@ -323,12 +326,13 @@ function coverNeed(need: AggregatedNeed, candidates: Candidate[]): Covered {
  * caller can render this, ask about surplus, and only then apply.
  */
 export async function buildPlan(
-  cookies: string,
+  adapter: ChainAdapter,
+  ctx: AdapterCtx,
   planId: string,
   opts: BuildOptions = {},
 ): Promise<Result<BuiltPlan>> {
   const { needs, conflicts } = listNeeds(planId);
-  const previousChoices = listChoices(planId);
+  const previousChoices = listChoices(planId, adapter.id);
   // "*" means "all" — the keys are search terms, and changing one to fix a
   // match silently invalidated a prior per-key approval. The wildcard survives
   // that. A helper keeps the intent readable.
@@ -346,7 +350,7 @@ export async function buildPlan(
   let unresolved = 0;
 
   for (const need of needs) {
-    const cands = await candidatesFor(cookies, need, limit);
+    const cands = await candidatesFor(adapter, ctx, need, limit);
     const previous = previousChoices.get(need.key) ?? null;
 
     if (!cands.ok) {
@@ -421,6 +425,7 @@ export async function buildPlan(
 
   return ok({
     planId,
+    chain: adapter.id,
     lines,
     conflicts,
     totalCost: Number(totalCost.toFixed(2)),
@@ -457,6 +462,7 @@ export interface ApplyResult {
  * Lines still waiting on a surplus answer are skipped rather than guessed.
  */
 export async function applyPlan(
+  site: AxfoodSite,
   cookies: string,
   plan: BuiltPlan,
   dryRun: boolean,
@@ -470,13 +476,13 @@ export async function applyPlan(
     if (!alive.ok) {
       return err(
         "AUTH_EXPIRED",
-        "Sessionen är inte längre giltig. Kör willys_login (force=true) och kör " +
+        "Sessionen är inte längre giltig. Kör login (force=true) och kör " +
           "om — inget skrevs till kundvagnen.",
       );
     }
   }
 
-  const before = await getCart(WILLYS, cookies);
+  const before = await getCart(site, cookies);
   // No "*" here on purpose: a wrong-product match must be confirmed per line.
   // Blanket-accepting uncertain matches is exactly what this gate prevents.
   const accepted = new Set(acceptMatch);
@@ -552,7 +558,7 @@ export async function applyPlan(
       continue;
     }
 
-    const applied = await runAction(cookies, a);
+    const applied = await runAction(site, cookies, a);
     if (!applied.ok) {
       failed++;
       // A 401 mid-batch means the session died — abort the rest instead of
@@ -571,18 +577,22 @@ export async function applyPlan(
     // Only record the choice once the cart actually accepted it, so a failed
     // write does not leave the ledger believing something is in the basket.
     if (line.chosen) {
-      recordChoice(plan.planId, {
-        key: line.need.key,
-        productCode: line.chosen.code,
-        productName: line.chosen.name,
-        packages: line.chosen.packages,
-        totalCost: line.chosen.totalCost,
-      });
+      recordChoice(
+        plan.planId,
+        {
+          key: line.need.key,
+          productCode: line.chosen.code,
+          productName: line.chosen.name,
+          packages: line.chosen.packages,
+          totalCost: line.chosen.totalCost,
+        },
+        plan.chain,
+      );
     }
     changes.push({ label, action: a.kind, detail, ok: true });
   }
 
-  const after = dryRun ? before : await getCart(WILLYS, cookies);
+  const after = dryRun ? before : await getCart(site, cookies);
 
   return ok({
     dryRun,
@@ -595,23 +605,24 @@ export async function applyPlan(
   });
 }
 
-/** Willys has no update endpoint; a replace is a removal plus an add. */
+/** Axfood has no update endpoint; a replace is a removal plus an add. */
 async function runAction(
+  site: AxfoodSite,
   cookies: string,
   a: Extract<PlanAction, { kind: "add" | "change_quantity" | "replace" }>,
 ): Promise<Result<unknown>> {
   switch (a.kind) {
     case "add":
-      return addToCart(WILLYS, cookies, a.code, a.packages);
+      return addToCart(site, cookies, a.code, a.packages);
 
     case "change_quantity":
       // addProducts sets the quantity rather than incrementing it.
-      return addToCart(WILLYS, cookies, a.code, a.to);
+      return addToCart(site, cookies, a.code, a.to);
 
     case "replace": {
-      const removed = await removeFromCart(WILLYS, cookies, a.fromCode);
+      const removed = await removeFromCart(site, cookies, a.fromCode);
       if (!removed.ok) return removed;
-      return addToCart(WILLYS, cookies, a.toCode, a.packages);
+      return addToCart(site, cookies, a.toCode, a.packages);
     }
   }
 }

@@ -123,7 +123,7 @@ order — det gör du själv på willys.se.
 
 ## Om något går fel
 
-Be Claude köra `willys_setup`. Den kontrollerar sex saker och säger exakt vad
+Be Claude köra `setup`. Den kontrollerar sex saker och säger exakt vad
 som saknas och vad du ska göra åt det.
 
 Vanligast:

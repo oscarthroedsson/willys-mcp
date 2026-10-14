@@ -11,24 +11,27 @@ import {
   createSession,
   deleteSession,
   findValidSession,
-  getCookies,
+  getSession,
   purgeExpired,
 } from "../auth/session.js";
 import { setupBlocker } from "../setup.js";
 import { defineTool, failure, text } from "./kit.js";
-import { sessionId } from "./schema-parts.js";
+import { chain, sessionId } from "./schema-parts.js";
 
 export const sessionTools = [
   defineTool({
     name: TOOL.login,
     description:
-      "Logga in på Willys och få ett sessionId tillbaka. Säkert att anropa: " +
-      "servern läser uppgifterna ur .env, de når aldrig din kontext (se " +
+      "Logga in hos en kedja och få ett sessionId tillbaka. Behövs bara för kundvagn, " +
+      "ordrar och planeringens plan_apply; sök och priser fungerar utan. Säkert att " +
+      "anropa: servern läser uppgifterna ur .env, de når aldrig din kontext (se " +
       "read_doc med help/security.md). Återanvänder en giltig session (24h); " +
-      "force=true tvingar ny inloggning.",
-    needsAuth: false,
+      "force=true tvingar ny inloggning. Stöds för Willys.",
+    auth: "none",
+    capability: "login",
     schema: z
       .object({
+        chain,
         force: z
           .boolean()
           .default(false)
@@ -47,7 +50,7 @@ export const sessionTools = [
       // throttles repeated logins, and sessions are valid for 24 hours, so a
       // fresh Puppeteer run per call is both slow and self-defeating.
       if (!a.force) {
-        const existing = findValidSession();
+        const existing = findValidSession(a.chain);
         if (existing) {
           // Our TTL is bookkeeping, not proof. Willys expires sessions on its
           // own schedule, so confirm upstream before handing this back —
@@ -74,7 +77,7 @@ export const sessionTools = [
         return failure(`${explain(cookies.kind)} — ${cookies.message}`);
 
       purgeExpired();
-      const id = createSession(cookies.data);
+      const id = createSession(cookies.data, a.chain);
       return text(
         `Inloggad. sessionId: ${id}\nAnvänd detta i alla efterföljande anrop. Giltig 24h.`,
       );
@@ -83,12 +86,13 @@ export const sessionTools = [
 
   defineTool({
     name: TOOL.checkAuth,
-    description: "Kontrollera om en session fortfarande är giltig.",
-    needsAuth: false,
+    description: "Kontrollera om en session fortfarande är giltig, och för vilken kedja.",
+    auth: "none",
     schema: z.object({ sessionId }).strict(),
     handle(a) {
-      return getCookies(a.sessionId)
-        ? text("Sessionen är giltig.")
+      const session = getSession(a.sessionId);
+      return session
+        ? text(`Sessionen är giltig (${session.chain}).`)
         : failure("Sessionen har gått ut eller finns inte. (AUTH_EXPIRED)");
     },
   }),
@@ -96,7 +100,7 @@ export const sessionTools = [
   defineTool({
     name: TOOL.logout,
     description: "Avsluta sessionen.",
-    needsAuth: false,
+    auth: "none",
     schema: z.object({ sessionId }).strict(),
     handle(a) {
       deleteSession(a.sessionId);

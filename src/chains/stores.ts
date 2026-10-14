@@ -178,3 +178,17 @@ export async function nearestStores(
 
   return ok(ranked);
 }
+
+/**
+ * Whether a store id exists in the chain's registry. Unknown chains (no
+ * registry) answer true — there is nothing to check against.
+ */
+export async function storeKnown(adapter: ChainAdapter, storeId: string): Promise<Result<boolean>> {
+  if (!adapter.listStores) return ok(true);
+  const fresh = await ensureFresh(adapter);
+  if (!fresh.ok) return fresh;
+  const row = conn()
+    .prepare("SELECT 1 FROM chain_stores WHERE chain = ? AND storeId = ?")
+    .get(adapter.id, storeId);
+  return ok(Boolean(row));
+}

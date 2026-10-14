@@ -5,7 +5,7 @@ följer [Keep a Changelog](https://keepachangelog.com/sv/1.1.0/) och versionerna
 följer [SemVer](https://semver.org/lang/sv/).
 
 **Till dig som är en AI som använder servern:** den här filen är källan för
-`willys_release_notes`. Anropa verktyget med `since` = den version du senast
+`release_notes`. Anropa verktyget med `since` = den version du senast
 kände till, så får du bara det som är nytt. En version med `### Brytande` betyder
 att verktygsnamn, parametrar eller svarsformat du minns kan vara fel. Läs då
 `### Migrering`, som visar gammalt anrop → nytt anrop.
@@ -28,43 +28,92 @@ att verktygsnamn, parametrar eller svarsformat du minns kan vara fel. Läs då
 
 ## [Unreleased]
 
+Nästa version är **2.0.0**: servern omfattar fem kedjor och verktygen har bytt
+namn.
+
+### Brytande
+
+- **Alla verktyg har tappat prefixet `willys_`.** `willys_search` heter `search`,
+  `willys_plan_status` heter `plan_status` och så vidare. Ett gammalt namn svarar
+  med sin ersättning.
+- **`chain` är obligatorisk** i sök, produkt, butiker, kampanjer, kundvagn,
+  ordrar, `login`, `plan_status` och `plan_apply`: `willys`, `hemkop`, `coop`,
+  `citygross` eller `mathem`.
+- `willys_nearest_stores` och `willys_refresh_stores` är borttagna; båda ingår i
+  `find_stores` (`lat`/`lng` respektive `refresh: true`).
+- `willys_get_product_detail` heter `get_product`.
+- Sök och priser kräver inte längre `sessionId`. Den är valfri och ger
+  användarens egen butik; kundvagn, ordrar och `plan_apply` kräver den fortfarande.
+- En session gäller en kedja. En Willys-session mot en annan kedja avvisas.
+- `plan_add_recipe` och `plan_set_ingredient` tar inte längre `sessionId`.
+- Butiksfälten heter `ecommerce` och `kind` (förut `clickAndCollect` och
+  `willysHemma`).
+
+### Migrering
+
+Lägg till `chain: "willys"` och ta bort prefixet för samma beteende som förut.
+
+| Förut (1.x) | Nu (2.0) |
+| --- | --- |
+| `willys_login({})` | `login({ chain: "willys" })` |
+| `willys_search({ sessionId, query: "kaffe" })` | `search({ chain: "willys", query: "kaffe" })` |
+| `willys_find_cheapest({ sessionId, query: "köttfärs", category: "Kött" })` | `find_cheapest({ chain: "willys", query: "köttfärs", category: "Kött" })` |
+| `willys_get_product_detail({ sessionId, productCode })` | `get_product({ chain: "willys", productCode })` |
+| `willys_find_stores({ query: "Göteborg" })` | `find_stores({ chain: "willys", query: "Göteborg" })` |
+| `willys_nearest_stores({ lat, lng })` | `find_stores({ chain: "willys", lat, lng })` |
+| `willys_refresh_stores({})` | `find_stores({ chain: "willys", query, refresh: true })` |
+| `willys_get_store({ storeId })` | `get_store({ chain: "willys", storeId })` |
+| `willys_get_campaigns({ sessionId, storeId })` | `get_campaigns({ chain: "willys", storeId })` |
+| `willys_get_cart({ sessionId })` | `get_cart({ chain: "willys", sessionId })` |
+| `willys_add_to_cart({ sessionId, productCode, quantity })` | `add_to_cart({ chain: "willys", sessionId, productCode, quantity })` |
+| `willys_get_orders({ sessionId })` | `get_orders({ chain: "willys", sessionId })` |
+| `willys_plan_add_recipe({ sessionId, plan, recipe, ingredients })` | `plan_add_recipe({ plan, recipe, ingredients })` |
+| `willys_plan_status({ sessionId, plan })` | `plan_status({ chain: "willys", plan })` |
+| `willys_plan_apply({ sessionId, plan, dryRun })` | `plan_apply({ chain: "willys", sessionId, plan, dryRun })` |
+| `willys_read_doc`, `willys_fetch_url`, `willys_setup` … | `read_doc`, `fetch_url`, `setup` … med samma argument |
+
+Nytt i 2.0 utan motsvarighet: `compare_prices` (samma vara i flera kedjor) och
+`plan_status({ compareWith })` (samma plan prissatt i flera kedjor).
+
 ### Tillagt
 
-- `willys_release_notes`: svarar med ändringarna sedan en given version.
+- Kedjorna Hemköp, Coop, City Gross och Mathem. Coop kräver en e-handelsbutik;
+  `find_stores({ chain: "coop", query: "<postnummer>" })` säger vilken.
+- `compare_prices`: billigaste matchande vara per kedja i ett anrop, med vilken
+  kedja som är billigast och en `avvagning` om billigast per kilo och billigast
+  för behovet skiljer.
+- `plan_status({ compareWith })`: vad samma plan kostar i andra kedjor.
+- Hemköp-priser för en vald butik utan inloggning.
+
+- `release_notes`: svarar med ändringarna sedan en given version.
 - Serverns version läses nu från `package.json`. Den skickas i
   `initialize`-svaret (`serverInfo.version`) och i instruktionerna, så att en
   AI-klient vet vilken version den pratar med.
 - Borttagna verktyg svarar med sin ersättning i stället för "Okänt verktyg"
   (`RETIRED_TOOLS`).
-- Internt: en adapter per kedja (`src/chains/`). Willys och Hemköp delar en
-  Axfood-adapter, Coop har en egen (sök, produkt per EAN, erbjudanden,
-  autocomplete, e-handelsbutiker via postnummer), liksom City Gross (sök,
-  produkt, erbjudanden, butiker) och Mathem (sök, produkt). De nya kedjorna är
-  inte nåbara via verktygen än; det kommer med `chain`-parametern.
+- Internt: en adapter per plattform (`src/chains/`). Willys och Hemköp delar en
+  Axfood-adapter.
 
 ### Ändrat
 
-- `willys_find_stores`, `willys_nearest_stores` och `willys_get_store` svarar
-  med fälten `ecommerce` och `kind` i stället för `clickAndCollect` och
-  `willysHemma`. Butiksregistret hämtas om automatiskt när det är äldre än
-  7 dagar.
-- `willys_find_cheapest` rangordnar på jämförpris i servern i stället för att
-  lita på Willys sortering. Resultatet blir detsamma för Willys.
+- Butiksregistret hämtas om automatiskt när det är äldre än 7 dagar.
+- `find_cheapest` rangordnar på jämförpris i servern i stället för att
+  lita på kedjans sortering. Resultatet blir detsamma för Willys.
 
-- `willys_find_cheapest`: jämförpriset kontrolleras mot pris ÷ förpackning. Avviker
+- `find_cheapest`: jämförpriset kontrolleras mot pris ÷ förpackning. Avviker
   uppströms värde mer än en faktor 3 används det beräknade, och varje produkt
   har `perUnitSource` (`uppstroms`, `beraknat` eller `okontrollerat`).
-- `willys_find_cheapest`: har träffarna olika jämförenheter (kr/kg och kr/l)
+- `find_cheapest`: har träffarna olika jämförenheter (kr/kg och kr/l)
   rangordnas den vanligaste enheten först, och svaret säger det i `notering`.
 
 ### Fixat
 
-- `willys_find_stores` hittar butiker på postnummer skrivet utan mellanslag
+- `find_stores` hittar butiker på postnummer skrivet utan mellanslag
   (`82231` matchar `822 31`).
-- `willys_find_cheapest` slängde Nötfärs, Blandfärs och Fläskfärs för
+- `find_cheapest` slängde Nötfärs, Blandfärs och Fläskfärs för
   "köttfärs" (35 av 37 träffar) eftersom namnen inte innehöll ordet. Sammansatta
   ord med samma efterled räknas nu som relaterade.
-- `willys_find_cheapest` sorterar bort djurmat när frågan inte gäller djur
+- `find_cheapest` sorterar bort djurmat när frågan inte gäller djur
   (`bortfiltrerade.petFood`).
 
 ## [1.0.0] - 2026-07-31

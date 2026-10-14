@@ -67,7 +67,7 @@ function checkEnvFile(): SetupCheck {
       label: ".env finns",
       status: "missing",
       detail: `ingen .env på ${file}`,
-      fix: `Kör willys_setup_init — den skapar ${file} åt användaren med rätt rättigheter.`,
+      fix: `Kör setup_init — den skapar ${file} åt användaren med rätt rättigheter.`,
     };
   }
 
@@ -173,9 +173,9 @@ function checkStoreId(): SetupCheck {
       id: "store_id",
       label: "WILLYS_STORE_ID",
       status: "warning",
-      detail: "inte satt — bara willys_get_campaigns påverkas",
+      detail: "inte satt — Willys-anrop utan storeId använder Willys standardbutik",
       fix:
-        "Valfritt. Slå upp din butik med willys_find_stores (ortsnamn eller " +
+        "Valfritt. Slå upp din butik med find_stores (chain willys, ortsnamn eller " +
         "postnummer) och sätt id:t i .env.",
     };
   }
@@ -185,7 +185,7 @@ function checkStoreId(): SetupCheck {
       label: "WILLYS_STORE_ID",
       status: "invalid",
       detail: `"${raw}" är inte ett butiks-id`,
-      fix: "Butiks-id är 3–6 siffror. Slå upp med willys_find_stores.",
+      fix: "Butiks-id är 3–6 siffror. Slå upp med find_stores (chain willys).",
     };
   }
   return { id: "store_id", label: "WILLYS_STORE_ID", status: "ok", detail: raw };
@@ -268,7 +268,7 @@ export function inspectSetup(): SetupReport {
   if (blockers.length > 0) {
     const envFile = ENV_FILE();
     if (blockers.some((b) => b.id === "env_file")) {
-      steps.push(`1. Kör willys_setup_init — den skapar ${envFile}`);
+      steps.push(`1. Kör setup_init — den skapar ${envFile}`);
     }
     if (blockers.some((b) => b.id === "username" || b.id === "password")) {
       steps.push(
@@ -423,7 +423,7 @@ export function initEnvFile(storeId?: string): InitResult {
     remaining,
     note:
       remaining.length === 0
-        ? "Allt ifyllt. Kör willys_login — ingen omstart behövs."
+        ? "Allt ifyllt. Kör login — ingen omstart behövs."
         : "Uppgifterna skrivs i filen, av användaren, inte i chatten. Varför: " +
           'read_doc("help/security.md").',
   };
@@ -446,6 +446,6 @@ export function setupBlocker(): string | null {
 
   return (
     `Servern är inte konfigurerad på den här datorn. Saknas: ${missing}. ` +
-    `Kör willys_setup för fullständiga steg — filen som ska fyllas i är ${report.envFile}.`
+    `Kör setup för fullständiga steg — filen som ska fyllas i är ${report.envFile}.`
   );
 }

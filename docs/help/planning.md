@@ -1,18 +1,31 @@
 # Måltidsplanering — kundvagnen som projektion av recept
 
 Serverns viktigaste flöde. Använd det när användaren ger dig recept och vill ha
-varorna i kundvagnen. Lägg INTE i varor en och en med `willys_add_to_cart` när
+varorna i kundvagnen. Lägg INTE i varor en och en med `add_to_cart` när
 det handlar om recept — då tappas aggregeringen.
 
 ## Flödet
 
-0. `willys_fetch_url` — ger användaren dig recept som länkar, hämta var och en
+0. `fetch_url` — ger användaren dig recept som länkar, hämta var och en
    här först. Svaret ger schema.org Recipe (fältet `strukturerad_data`) med
    ingredienser och portionsantal, eller ren text att läsa dem ur. Räkna om
    till de portioner användaren vill laga innan nästa steg.
-1. `willys_plan_add_recipe` — ett anrop per recept, med dess ingredienser
-2. `willys_plan_status` — visa föreslagen korg, kostnad och beslutslägen
-3. `willys_plan_apply` — `dryRun=true` först, sedan false efter godkännande
+1. `plan_add_recipe` — ett anrop per recept, med dess ingredienser
+2. `plan_status({ chain, ... })` — visa föreslagen korg, kostnad och beslutslägen
+   i den kedjan
+3. `plan_apply({ chain, sessionId, ... })` — `dryRun=true` först, sedan false
+   efter godkännande
+
+## Planen är kedjeoberoende, korgen är det inte
+
+Behovsregistret (steg 1) hör inte till någon kedja. `plan_status` prissätter det
+i `chain`, och med `compareWith: ["coop", "mathem"]` (Coop kräver butik i
+`compareStores`) visas vad samma plan kostar i de andra kedjorna — utan att
+något ändras. Övriga kedjors summa räknas med billigaste val per rad.
+
+`plan_apply` lägger i kundvagnen och kräver en kedja med kundvagn, idag Willys.
+Valen som gjorts sparas per kedja: en produktkod från Willys betyder inget hos
+Coop, så att byta kedja börjar om valen utan att tappa behoven.
 
 ## Behov aggregeras, de staplas inte
 
@@ -23,13 +36,13 @@ med härkomsten "Mån:6 + Ons:4 + Tors:3" utskriven. Nyckeln behoven slås ihop 
 
 Lägger användaren till ett fjärde recept räknas HELA korgen om från registret.
 Det kan mycket väl byta ut en produkt du redan lagt i vagnen — 6-packet som
-räckte för 6 ägg är fel vara för 13. `willys_plan_apply` skickar bara
+räckte för 6 ägg är fel vara för 13. `plan_apply` skickar bara
 differensen, så det är gratis att köra om efter varje nytt recept.
 
 ## Överskottsfrågan ska ställas, inte gissas
 
 När billigaste sättet att täcka behovet ger mycket över, returnerar
-`willys_plan_status` ett fält `beslut_kravs` i stället för att välja:
+`plan_status` ett fält `beslut_kravs` i stället för att välja:
 
 > Ägg 24-pack är 7.80 kr billigare men ger 11 st över behovet. Ägg 10-pack ger
 > bara 7 st över. Vill du ha det billigare med överskott?
@@ -42,7 +55,7 @@ sedan svaret vidare:
 
 Har användaren redan sagt "välj alltid billigast" kan du sätta `acceptSurplus`
 direkt utan att fråga varje gång. Rader med obesvarad fråga hoppas över av
-`willys_plan_apply` — de hamnar aldrig i vagnen av misstag.
+`plan_apply` — de hamnar aldrig i vagnen av misstag.
 
 ## Mängder
 
@@ -53,6 +66,6 @@ ihop — svaret listar det som en konflikt och du får be användaren välja enh
 
 ## Kategori och mustContain gäller även här
 
-Samma fällor som i `willys_find_cheapest`. Sätt `category` för tvetydiga varor
+Samma fällor som i `find_cheapest`. Sätt `category` för tvetydiga varor
 och `mustContain` när söktermen riskerar att matcha fel — annars hamnar
 hundtugget i korgen igen, den här gången utan att någon tittar.

@@ -1,112 +1,145 @@
 import { z } from "zod";
 import { TOOL } from "../constants/index.js";
-import { DEFAULT_STORE_ID } from "../config.js";
 import { compact, prune, pruneProduct } from "../mappers/prune.js";
-import { willys } from "../chains/axfood.js";
 import * as stores from "../chains/stores.js";
-import { defineTool, failure, respond } from "./kit.js";
-import { sessionId } from "./schema-parts.js";
+import type { Store } from "../chains/types.js";
+import { defineTool, failure, refuse, respond } from "./kit.js";
+import { chain, optionalSessionId, storeId } from "./schema-parts.js";
+
+/** What the model needs to pick a store; coordinates and hours only on request. */
+const listed = (s: Store & { distanceKm?: number }) =>
+  prune({
+    storeId: s.storeId,
+    name: s.name,
+    town: s.town,
+    street: s.street,
+    postalCode: s.postalCode,
+    kind: s.kind,
+    ecommerce: s.ecommerce,
+    distanceKm: s.distanceKm,
+  });
 
 export const storesTools = [
   defineTool({
     name: TOOL.findStores,
     description:
-      "Slå upp butiker på ort, namn eller postnummer. Läser ur lokal cache av hela kedjans register, " +
-      "som hämtas om automatiskt när det är äldre än en vecka.",
-    needsAuth: false, // Store lookups need no session: the registry is public.
+      "Hitta butiker i en kedja: på ort, namn eller postnummer (query), eller närmast en " +
+      "koordinat (lat/lng). För Coop ger ett postnummer också den e-handelsbutik som " +
+      "levererar dit — det är den butiken sök och priser ska gälla. Registret cachas och " +
+      "förnyas automatiskt efter en vecka. Mathem har inga butiker.",
+    auth: "none",
+    capability: "stores",
     schema: z
       .object({
-        query: z.string().min(1).max(80).describe("Ortsnamn, butiksnamn eller postnummer"),
-        onlyClickAndCollect: z
+        chain,
+        query: z.string().min(1).max(80).optional().describe("Ort, butiksnamn eller postnummer"),
+        lat: z.number().min(55).max(70).optional(),
+        lng: z.number().min(10).max(25).optional(),
+        onlyEcommerce: z
           .boolean()
           .default(false)
-          .describe("Endast butiker som stödjer e-handel/upphämtning"),
+          .describe("Endast butiker som går att handla online från (hemleverans/upphämtning)"),
+        refresh: z.boolean().default(false).describe("Hämta om registret från kedjan först"),
         limit: z.number().int().min(1).max(50).default(10),
       })
-      .strict(),
-    async handle(a) {
-      const r = await stores.findStores(willys, a.query, a.onlyClickAndCollect, a.limit);
-      return respond(r, (d) => compact({ traff: d.length, butiker: d.map(prune) }));
-    },
-  }),
+      .strict()
+      .refine((a) => a.query || (a.lat !== undefined && a.lng !== undefined), {
+        message: "ange query, eller både lat och lng",
+      }),
+    async handle(a, ctx) {
+      const adapter = ctx.adapter!;
+      if (a.refresh) {
+        const r = await stores.refreshStores(adapter);
+        if (!r.ok) return respond(r, () => "");
+      }
 
-  defineTool({
-    name: TOOL.nearestStores,
-    description: "Närmaste butiker till en koordinat, sorterade på avstånd.",
-    needsAuth: false,
-    schema: z
-      .object({
-        lat: z.number().min(55).max(70),
-        lng: z.number().min(10).max(25),
-        onlyClickAndCollect: z.boolean().default(true),
-        limit: z.number().int().min(1).max(20).default(5),
-      })
-      .strict(),
-    async handle(a) {
-      const r = await stores.nearestStores(
-        willys,
-        a.lat,
-        a.lng,
-        a.onlyClickAndCollect,
-        a.limit,
+      if (a.lat !== undefined && a.lng !== undefined) {
+        const r = await stores.nearestStores(adapter, a.lat, a.lng, a.onlyEcommerce, a.limit);
+        return respond(r, (d) => compact({ kedja: adapter.id, butiker: d.map(listed) }));
+      }
+
+      const query = a.query!;
+      const postcode = /^\d{3}\s?\d{2}$/.test(query.trim()) ? query.replace(/\s/g, "") : null;
+
+      // Coop: the postcode decides the e-commerce store, which is the one whose
+      // assortment and prices apply. Show it first, labelled.
+      let serving: Store | null = null;
+      if (postcode && adapter.storeForPostcode) {
+        const s = await adapter.storeForPostcode(postcode);
+        if (s.ok) serving = s.data;
+      }
+
+      const r = await stores.findStores(adapter, query, a.onlyEcommerce, a.limit);
+      return respond(r, (d) =>
+        compact({
+          kedja: adapter.id,
+          ...(serving
+            ? {
+                levererar_till_postnumret: listed(serving),
+                notering: `Använd storeId ${serving.storeId} för sök och priser hos ${adapter.displayName}.`,
+              }
+            : {}),
+          traff: d.length,
+          butiker: d.map(listed),
+        }),
       );
-      return respond(r, (d) => compact({ butiker: d.map(prune) }));
     },
   }),
 
   defineTool({
     name: TOOL.getStore,
     description:
-      "Detaljer för en butik: öppettider, plockavgift, fri frakt-gräns och länk till butikens erbjudandeblad.",
-    needsAuth: false,
+      "Detaljer för en butik: adress, öppettider, avgifter och länk till erbjudandeblad där kedjan har det.",
+    auth: "none",
+    capability: "stores",
     schema: z
-      .object({ storeId: z.string().regex(/^\d{3,6}$/, "butiks-id är 3-6 siffror") })
+      .object({ chain, storeId: z.string().regex(/^\d{3,6}$/, "butiks-id är 3–6 siffror") })
       .strict(),
-    async handle(a) {
-      const r = await willys.storeDetail!(a.storeId);
-      return respond(r, (d) => compact(prune(d)));
-    },
-  }),
-
-  defineTool({
-    name: TOOL.refreshStores,
-    description: "Hämta om butiksregistret från Willys.",
-    needsAuth: false,
-    schema: z.object({}).strict(),
-    async handle() {
-      const r = await stores.refreshStores(willys);
-      return respond(r, (n) => `Butiksregistret uppdaterat: ${n} butiker.`);
+    async handle(a, ctx) {
+      const adapter = ctx.adapter!;
+      if (adapter.storeDetail) {
+        const r = await adapter.storeDetail(a.storeId);
+        return respond(r, (d) => compact({ kedja: adapter.id, ...prune(d) }));
+      }
+      // No detail route (City Gross): answer from the registry.
+      const r = await stores.findStores(adapter, a.storeId, false, 50);
+      if (!r.ok) return respond(r, () => "");
+      const hit = r.data.find((s) => s.storeId === a.storeId);
+      return hit
+        ? respond({ ok: true, data: hit }, (d) => compact({ kedja: adapter.id, ...prune(d) }))
+        : refuse("NOT_FOUND", `Butiken ${a.storeId} finns inte hos ${adapter.displayName}.`);
     },
   }),
 
   defineTool({
     name: TOOL.getCampaigns,
     description:
-      "Butiksspecifika kampanjer och erbjudanden. Ersätter den döda get_offers.",
-    needsAuth: true,
+      "Butikens aktuella kampanjer och erbjudanden i en kedja. För Willys tas butiken ur " +
+      "WILLYS_STORE_ID i .env om storeId utelämnas.",
+    auth: "optional",
+    capability: "campaigns",
+    validateStore: true,
     schema: z
       .object({
-        sessionId,
-        storeId: z
-          .string()
-          .regex(/^\d{3,6}$/)
-          .optional()
-          .describe("Butiks-id. Utelämnas: tas från WILLYS_STORE_ID i .env."),
+        chain,
+        storeId,
+        sessionId: optionalSessionId,
         page: z.number().int().min(0).max(50).default(0),
         size: z.number().int().min(1).max(100).default(30),
       })
       .strict(),
     async handle(a, ctx) {
-      const storeId = a.storeId ?? DEFAULT_STORE_ID();
-      if (!storeId) {
+      const adapter = ctx.adapter!;
+      if (!ctx.storeId) {
         return failure(
-          "Inget butiks-id. Ange storeId eller sätt WILLYS_STORE_ID i .env " +
-            "(slå upp med willys_find_stores).",
+          `Inget butiks-id. Ange storeId (slå upp med find_stores för ${adapter.id})` +
+            (adapter.id === "willys" ? " eller sätt WILLYS_STORE_ID i .env." : "."),
         );
       }
-      const r = await willys.campaigns!(ctx, storeId, a.page, a.size);
+      const r = await adapter.campaigns!(ctx, ctx.storeId, a.page, a.size);
       return respond(r, (d) =>
         compact({
+          kedja: adapter.id,
           butik: d.storeId,
           antal: d.totalHits,
           produkter: d.products.map((p) => prune(pruneProduct(p))),

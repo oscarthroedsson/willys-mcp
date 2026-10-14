@@ -140,3 +140,8 @@ export const MATHEM = {
   api: "https://www.mathem.se/api/v1",
   pageSize: 30,
 } as const;
+
+/** The Axfood site for a chain id, for the routes only Axfood has (cart, orders). */
+export function axfoodSite(chain: string | null): AxfoodSite | null {
+  return chain === "willys" ? WILLYS : chain === "hemkop" ? HEMKOP : null;
+}

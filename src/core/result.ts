@@ -10,7 +10,7 @@
 export type ErrorKind =
   /** 401/403 — the caller must re-authenticate. Never conflate with "empty". */
   | "AUTH_EXPIRED"
-  /** 404 — upstream route is gone (three of them already are). */
+  /** 404 — no such thing at this chain: a bad id, or a route that is gone. */
   | "NOT_FOUND"
   /** 5xx after retries. */
   | "UPSTREAM"
@@ -48,18 +48,18 @@ export const err = <T = never>(
 export function explain(kind: ErrorKind): string {
   switch (kind) {
     case "AUTH_EXPIRED":
-      return "Sessionen har gått ut. Kör willys_login igen.";
+      return "Sessionen har gått ut. Kör login igen för samma kedja.";
     case "NOT_FOUND":
-      return "Endpointen finns inte längre hos Willys.";
+      return "Finns inte hos kedjan — fel id, eller en route som tagits bort.";
     case "UPSTREAM":
-      return "Willys svarade med serverfel efter omförsök.";
+      return "Kedjan svarade med serverfel efter omförsök.";
     case "SHAPE":
-      return "Willys svarade i ett oväntat format.";
+      return "Kedjan svarade i ett oväntat format.";
     case "NETWORK":
-      return "Nätverksfel mot Willys.";
+      return "Nätverksfel mot kedjan.";
     case "INPUT":
       return "Ogiltiga argument.";
     case "SETUP_REQUIRED":
-      return "Servern är inte konfigurerad än. Kör willys_setup och visa stegen för användaren.";
+      return "Servern är inte konfigurerad än. Kör setup och visa stegen för användaren.";
   }
 }

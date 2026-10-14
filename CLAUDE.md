@@ -52,10 +52,18 @@ gruppfil; splittra det INTE över namnkonstant + schemaregister + dispatch igen.
 Namnet deklareras fortfarande i `constants/tools.ts`, och en startup-vakt i
 `tools/registry.ts` kastar om ett deklarerat namn saknar handler.
 
-**Dispatchern äger boilerplaten.** `tools/registry.ts` slår upp verktyget,
-Zod-validerar, löser session→cookies en gång (verktyg med `needsAuth: true` får
-`ctx.cookies` — återimplementera aldrig AUTH_EXPIRED-grenen i en handler), och kör
-i en sista-utväg-try/catch. `index.ts` är bara transport + wiring, håll den tunn.
+**Dispatchern äger boilerplaten.** `tools/registry.ts` slår upp verktyget (och
+svarar med ersättningen för ett namn i `RETIRED_TOOLS`), Zod-validerar, löser
+`chain` → `ctx.adapter` och vägrar om kedjan saknar verktygets `capability`,
+löser session → `ctx.cookies` enligt `auth` (`required`/`optional`/`none`) och
+kontrollerar att sessionen gäller samma kedja, sätter `ctx.storeId` och
+validerar den mot kedjans register när verktyget har `validateStore`. Allt det
+ska aldrig återimplementeras i en handler. Sedan körs handlern i en
+sista-utväg-try/catch. `index.ts` är bara transport + wiring, håll den tunn.
+
+**Verktygsnamn har inget prefix.** Klienterna namnger redan per server
+(`mcp__<server>__search`), och ett prefix knutet till paketnamnet skulle göra
+ett namnbyte till en brytande ändring för alla verktyg (beslut i #23).
 
 **Zod-scheman är enforcement.** MCP-SDK:n validerar inte inkommande argument.
 Varje nytt verktyg måste ha ett schema med `.strict()`, och numeriska fält som

@@ -105,104 +105,118 @@ async function main() {
   );
 
   // --- login ---
-  const login = await call("willys_login", {});
+  const login = await call("login", { chain: "willys" });
   const sessionId = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.exec(login.text)?.[1] ?? "";
-  record("willys_login", !login.isError && !!sessionId, sessionId || login.text);
+  record("login", !login.isError && !!sessionId, sessionId || login.text);
   if (!sessionId) {
     finish();
     return;
   }
 
   // --- auth ---
-  const auth = await call("willys_check_auth", { sessionId });
-  record("willys_check_auth", !auth.isError, auth.text);
+  const auth = await call("check_auth", { sessionId });
+  record("check_auth", !auth.isError, auth.text);
+
+  // --- 2.0.0: old names redirect, capabilities refuse cleanly ---
+  const retired = await call("willys_search", { query: "kaffe" });
+  record(
+    "gammalt namn pekar på ersättningen",
+    retired.isError && retired.text.includes("search") && retired.text.includes("2.0.0"),
+    retired.text.slice(0, 100),
+  );
+  const noCart = await call("get_cart", { chain: "coop", sessionId });
+  record("kedja utan kundvagn avvisas", noCart.isError && /willys/.test(noCart.text), noCart.text.slice(0, 100));
+  const wrongChain = await call("search", { chain: "hemkop", query: "kaffe", sessionId });
+  record("session för fel kedja avvisas", wrongChain.isError, wrongChain.text.slice(0, 100));
+  const hemkop = await call("search", { chain: "hemkop", query: "kaffe", size: 3 });
+  record("search hemkop anonymt", !hemkop.isError && /"kedja":"hemkop"/.test(hemkop.text), hemkop.text.slice(0, 90));
+  const coopNoStore = await call("search", { chain: "coop", query: "kaffe" });
+  record("coop utan butik ber om postnummer", coopNoStore.isError && /postnummer/.test(coopNoStore.text), coopNoStore.text.slice(0, 90));
+  const compare = await call("compare_prices", {
+    query: "mellanmjölk",
+    chains: ["willys", "hemkop", "coop", "citygross", "mathem"],
+    stores: { coop: "252500" },
+    mustContain: ["mellanmjölk"],
+  });
+  const compared = (compare.text.match(/"kedja":"(willys|hemkop|coop|citygross|mathem)","(butik|traffar)/g) ?? []).length;
+  record("compare_prices fem kedjor", !compare.isError && compared === 5 && compare.text.length < 2500, `${compared} kedjor, ${compare.text.length} tecken`);
 
   // --- validation boundaries (must be rejected) ---
-  const badCode = await call("willys_add_to_cart", {
-    sessionId,
+  const badCode = await call("add_to_cart", { chain: "willys", sessionId,
     productCode: "inte-en-kod",
     quantity: 1,
   });
   record("avvisar ogiltig produktkod", badCode.isError, badCode.text);
 
-  const badQty = await call("willys_add_to_cart", {
-    sessionId,
+  const badQty = await call("add_to_cart", { chain: "willys", sessionId,
     productCode: "101222270_ST",
     quantity: 9999,
   });
   record("avvisar orimlig kvantitet", badQty.isError, badQty.text);
 
-  const badSession = await call("willys_get_cart", {
-    sessionId: "inte-ett-uuid",
+  const badSession = await call("get_cart", { chain: "willys", sessionId: "inte-ett-uuid",
   });
   record("avvisar ogiltigt sessionId", badSession.isError, badSession.text);
 
   // --- customer ---
-  const cust = await call("willys_get_customer_info", { sessionId });
-  record("willys_get_customer_info", !cust.isError, cust.text);
+  const cust = await call("get_customer_info", { chain: "willys", sessionId });
+  record("get_customer_info", !cust.isError, cust.text);
 
   // --- orders ---
-  const orders = await call("willys_get_orders", { sessionId, limit: 3 });
-  record("willys_get_orders", !orders.isError, orders.text);
+  const orders = await call("get_orders", { chain: "willys", sessionId, limit: 3 });
+  record("get_orders", !orders.isError, orders.text);
 
   // --- search ---
-  const search = await call("willys_search", {
-    sessionId,
+  const search = await call("search", { chain: "willys", sessionId,
     query: "kaffe",
     size: 5,
   });
-  record("willys_search", !search.isError, search.text);
+  record("search", !search.isError, search.text);
 
-  const swedish = await call("willys_search", {
-    sessionId,
+  const swedish = await call("search", { chain: "willys", sessionId,
     query: "kycklingfile",
     size: 10,
     onlySwedish: true,
   });
   const allSwedish =
     !swedish.isError && !/"origin":"OKAND"/.test(swedish.text);
-  record("willys_search onlySwedish", allSwedish, swedish.text);
+  record("search onlySwedish", allSwedish, swedish.text);
 
   // --- newly ported read tools ---
-  const sugg = await call("willys_search_suggestions", {
-    sessionId,
+  const sugg = await call("search_suggestions", { chain: "willys",
     term: "mjol",
   });
-  record("willys_search_suggestions", !sugg.isError, sugg.text);
+  record("search_suggestions", !sugg.isError, sugg.text);
 
-  const detail = await call("willys_get_product_detail", {
-    sessionId,
+  const detail = await call("get_product", { chain: "willys", sessionId,
     productCode: "101222270_ST",
   });
-  record("willys_get_product_detail", !detail.isError, detail.text.slice(0, 90));
+  record("get_product", !detail.isError, detail.text.slice(0, 90));
 
   const orderId = /"id":"(\d+)"/.exec(orders.text)?.[1] ?? "";
   if (orderId) {
-    const od = await call("willys_get_order_details", { sessionId, orderId });
+    const od = await call("get_order_details", { chain: "willys", sessionId, orderId });
     const hasLines = !od.isError && /antal_rader":([1-9])/.test(od.text);
-    record("willys_get_order_details", hasLines, od.text.slice(0, 90));
+    record("get_order_details", hasLines, od.text.slice(0, 90));
   } else {
-    record("willys_get_order_details", false, "hittade inget order-id");
+    record("get_order_details", false, "hittade inget order-id");
   }
 
-  const freq = await call("willys_get_frequent_products", {
-    sessionId,
+  const freq = await call("get_frequent_products", { chain: "willys", sessionId,
     scanOrders: 3,
     limit: 5,
   });
   const hasFreq = !freq.isError && /timesBought/.test(freq.text);
-  record("willys_get_frequent_products", hasFreq, freq.text.slice(0, 110));
+  record("get_frequent_products", hasFreq, freq.text.slice(0, 110));
 
-  const camp = await call("willys_get_campaigns", {
-    sessionId,
+  const camp = await call("get_campaigns", { chain: "willys", sessionId,
     storeId: "2220",
     size: 3,
   });
   const hasCamp = !camp.isError && /"antal":\d+/.test(camp.text);
-  record("willys_get_campaigns", hasCamp, camp.text.slice(0, 100));
+  record("get_campaigns", hasCamp, camp.text.slice(0, 100));
 
-  const cheap = await call("willys_find_cheapest", {
-    sessionId,
+  const cheap = await call("find_cheapest", { chain: "willys", sessionId,
     query: "köttfärs",
     category: "Kött",
     requireSwedishMeat: true,
@@ -210,32 +224,30 @@ async function main() {
     limit: 3,
   });
   const noSauce = !cheap.isError && !/Köttfärssås|Köttfärssoppa/.test(cheap.text);
-  record("willys_find_cheapest (kategori sållar sås)", noSauce, cheap.text.slice(0, 110));
+  record("find_cheapest (kategori sållar sås)", noSauce, cheap.text.slice(0, 110));
 
   // --- cart lifecycle ---
-  const before = await call("willys_get_cart", { sessionId });
+  const before = await call("get_cart", { chain: "willys", sessionId });
   const beforeCount = /"antal":(\d+)/.exec(before.text)?.[1] ?? "?";
-  record("willys_get_cart (före)", !before.isError, `antal=${beforeCount}`);
+  record("get_cart (före)", !before.isError, `antal=${beforeCount}`);
 
   const TEST_PRODUCT = "101222270_ST"; // Kycklingfilé Svensk Fryst
-  const add = await call("willys_add_to_cart", {
-    sessionId,
+  const add = await call("add_to_cart", { chain: "willys", sessionId,
     productCode: TEST_PRODUCT,
     quantity: 1,
   });
-  record("willys_add_to_cart", !add.isError, add.text);
+  record("add_to_cart", !add.isError, add.text);
 
-  const during = await call("willys_get_cart", { sessionId });
+  const during = await call("get_cart", { chain: "willys", sessionId });
   const present = during.text.includes(TEST_PRODUCT);
   record("varan syns i kundvagnen", present, present ? "bekräftad" : during.text);
 
-  const remove = await call("willys_remove_from_cart", {
-    sessionId,
+  const remove = await call("remove_from_cart", { chain: "willys", sessionId,
     productCode: TEST_PRODUCT,
   });
-  record("willys_remove_from_cart", !remove.isError, remove.text);
+  record("remove_from_cart", !remove.isError, remove.text);
 
-  const after = await call("willys_get_cart", { sessionId });
+  const after = await call("get_cart", { chain: "willys", sessionId });
   const afterCount = /"antal":(\d+)/.exec(after.text)?.[1] ?? "?";
   record(
     "kundvagn återställd",
@@ -244,10 +256,10 @@ async function main() {
   );
 
   // --- logout LAST, then prove the session is dead ---
-  const out = await call("willys_logout", { sessionId });
-  record("willys_logout", !out.isError, out.text);
+  const out = await call("logout", { sessionId });
+  record("logout", !out.isError, out.text);
 
-  const dead = await call("willys_check_auth", { sessionId });
+  const dead = await call("check_auth", { sessionId });
   record("session död efter logout", dead.isError, dead.text);
 
   finish();

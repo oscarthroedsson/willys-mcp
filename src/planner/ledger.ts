@@ -148,6 +148,15 @@ function conn(): Database.Database {
     );
   }
 
+  // A recorded choice is a product code, and codes mean nothing outside the
+  // chain that issued them. Choices from before 2.0.0 were all Willys.
+  const choiceCols = db
+    .prepare("PRAGMA table_info(plan_choices)")
+    .all() as Array<{ name: string }>;
+  if (!choiceCols.some((c) => c.name === "chain")) {
+    db.exec("ALTER TABLE plan_choices ADD COLUMN chain TEXT NOT NULL DEFAULT 'willys'");
+  }
+
   return db;
 }
 
@@ -388,13 +397,15 @@ export function listNeeds(planId: string): {
 export function recordChoice(
   planId: string,
   choice: Omit<RecordedChoice, "decidedAt">,
+  chain = "willys",
 ): void {
   conn()
     .prepare(`
       INSERT INTO plan_choices
-        (plan_id, key, product_code, product_name, packages, total_cost, decided_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+        (plan_id, key, product_code, product_name, packages, total_cost, decided_at, chain)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(plan_id, key) DO UPDATE SET
+        chain        = excluded.chain,
         product_code = excluded.product_code,
         product_name = excluded.product_name,
         packages     = excluded.packages,
@@ -409,13 +420,15 @@ export function recordChoice(
       choice.packages,
       choice.totalCost,
       Date.now(),
+      chain,
     );
 }
 
-export function listChoices(planId: string): Map<string, RecordedChoice> {
+/** Choices recorded for this chain only — another chain's codes are meaningless here. */
+export function listChoices(planId: string, chain = "willys"): Map<string, RecordedChoice> {
   const rows = conn()
-    .prepare("SELECT * FROM plan_choices WHERE plan_id = ?")
-    .all(planId) as ChoiceRow[];
+    .prepare("SELECT * FROM plan_choices WHERE plan_id = ? AND chain = ?")
+    .all(planId, chain) as ChoiceRow[];
 
   return new Map(
     rows.map((r) => [

@@ -21,7 +21,7 @@ export const setupTools = [
       "sessioner eller något annat på datorn, så den är säker att anropa fritt. " +
       "De korta instruktionerna pekar hit för detaljer så de inte belastar varje session. " +
       `Tillgängliga: ${Object.keys(DOCS).join(", ")}.`,
-    needsAuth: false,
+    auth: "none",
     schema: z
       .object({
         path: z
@@ -46,7 +46,7 @@ export const setupTools = [
       "parametrar du minns — efter en brytande version kan de vara borttagna " +
       "eller omdöpta. Svaret innehåller bara nyare versioner; brytande ändringar " +
       "har en migreringssektion med gammalt → nytt anrop. Utan since: de tre senaste.",
-    needsAuth: false,
+    auth: "none",
     schema: z
       .object({
         since: z
@@ -69,7 +69,7 @@ export const setupTools = [
                 brytande: releases.filter((r) => r.breaking).map((r) => r.version),
                 versioner: releases.map((r) => ({
                   version: r.version,
-                  datum: r.date,
+                  ...(r.released ? { datum: r.date } : { slappt: false }),
                   brytande: r.breaking,
                   andringar: r.body,
                 })),
@@ -88,7 +88,7 @@ export const setupTools = [
       "förbi block som din egen hämtning fastnar på, och det är billigare. " +
       "Faller din egen webbläsning tillbaka bara om detta misslyckas. Renderar " +
       "JS-sidor automatiskt vid behov.",
-    needsAuth: false,
+    auth: "none",
     schema: z
       .object({
         url: z
@@ -124,9 +124,9 @@ export const setupTools = [
     name: TOOL.openFile,
     description:
       "Öppna en lokal fil i användarens standardeditor. Använd för att öppna " +
-      ".env åt dem vid uppsättning — sökvägen står i svaret från willys_setup. " +
+      ".env åt dem vid uppsättning — sökvägen står i svaret från setup. " +
       "En chattklient gör inte filsökvägar klickbara. Läser inte innehållet.",
-    needsAuth: false,
+    auth: "none",
     schema: z
       .object({
         path: z
@@ -135,7 +135,7 @@ export const setupTools = [
           .describe(
             "Absolut sökväg till filen som ska öppnas i användarens standardeditor. " +
               "Använd för .env vid uppsättning — sökvägen står i svaret från " +
-              "willys_setup eller willys_setup_init.",
+              "setup eller setup_init.",
           ),
       })
       .strict(),
@@ -158,8 +158,8 @@ export const setupTools = [
     description:
       "Kontrollera om servern är konfigurerad på den här datorn och få exakta " +
       "steg om något saknas, med full sökväg till filen. Kräver ingen session. " +
-      "Kör detta först om willys_login svarar SETUP_REQUIRED. Se read_doc med help/setup.md.",
-    needsAuth: false,
+      "Kör detta först om login svarar SETUP_REQUIRED. Se read_doc med help/setup.md.",
+    auth: "none",
     schema: z.object({}).strict(),
     handle() {
       const r = inspectSetup();
@@ -167,7 +167,7 @@ export const setupTools = [
         compact({
           klar: r.ready,
           ...(r.ready
-            ? { status: "Servern är konfigurerad och redo. Kör willys_login." }
+            ? { status: "Servern är konfigurerad och redo. Kör login." }
             : {
                 status: "Servern är inte konfigurerad än.",
                 fil_att_fylla_i: r.envFile,
@@ -175,7 +175,7 @@ export const setupTools = [
                 ...(r.passwordHelp ? { losenordshjalp: r.passwordHelp } : {}),
                 notering:
                   "Ta användaren genom uppsättningen — läs read_doc(\"help/setup.md\"). " +
-                  "Öppna filen åt dem med willys_open_file. Finns losenordshjalp, " +
+                  "Öppna filen åt dem med open_file. Finns losenordshjalp, " +
                   "gå igenom den först: annars letar de efter ett lösenord som " +
                   "aldrig skapats.",
               }),
@@ -194,9 +194,9 @@ export const setupTools = [
     name: TOOL.setupInit,
     description:
       "Skapa .env åt användaren och skriv in butiks-id, med rättigheter 600. " +
-      "Returnerar sökvägen till filen. Öppna den sedan med willys_open_file så " +
+      "Returnerar sökvägen till filen. Öppna den sedan med open_file så " +
       "användaren kan fylla i sina uppgifter.",
-    needsAuth: false,
+    auth: "none",
     schema: z
       .object({
         storeId: z
@@ -205,7 +205,7 @@ export const setupTools = [
           .optional()
           .describe(
             "Butiks-id att skriva in åt användaren. Slå upp det med " +
-              "willys_find_stores först — fråga vilken ort de bor i, visa " +
+              "find_stores (chain willys) först — fråga vilken ort de bor i, visa " +
               "träffarna och låt dem välja. Utelämna om de inte vill välja butik än.",
           ),
       })
@@ -222,7 +222,7 @@ export const setupTools = [
           ...(r.remaining.length > 0
             ? {
                 nasta_steg:
-                  `Öppna filen åt dem: willys_open_file med path "${r.envFile}". ` +
+                  `Öppna filen åt dem: open_file med path "${r.envFile}". ` +
                   `Be dem fylla i ${r.remaining.join(" och ")} och spara — ingen ` +
                   "omstart behövs.",
                 fraga_forst:

@@ -6,6 +6,7 @@ import {
   SESSION_TTL_MS,
 } from "../constants/index.js";
 import { log } from "../core/logger.js";
+import type { ChainId } from "../chains/types.js";
 
 /**
  * Session storage. One table, one job.
@@ -17,9 +18,17 @@ import { log } from "../core/logger.js";
 
 interface Row {
   id: string;
+  chain: ChainId;
   cookies: string;
   created_at: number;
   expires_at: number;
+}
+
+/** A live session: whose cookies, for which chain. */
+export interface Session {
+  id: string;
+  chain: ChainId;
+  cookies: string;
 }
 
 let db: Database.Database | null = null;
@@ -39,6 +48,11 @@ function conn(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
   `);
+  // Sessions became per chain in 2.0.0. Rows from before were all Willys.
+  const cols = db.prepare("PRAGMA table_info(sessions)").all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "chain")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN chain TEXT NOT NULL DEFAULT 'willys'");
+  }
   return db;
 }
 
@@ -56,15 +70,15 @@ export function keepFunctional(all: Record<string, string>): string {
   return kept.map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
-export function createSession(cookies: string): string {
+export function createSession(cookies: string, chain: ChainId = "willys"): string {
   const id = randomUUID();
   const now = Date.now();
   conn()
     .prepare(
-      "INSERT INTO sessions (id, cookies, created_at, expires_at) VALUES (?, ?, ?, ?)",
+      "INSERT INTO sessions (id, chain, cookies, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
     )
-    .run(id, cookies, now, now + SESSION_TTL_MS);
-  log.info(`session skapad: ${id}`);
+    .run(id, chain, cookies, now, now + SESSION_TTL_MS);
+  log.info(`session skapad: ${id} (${chain})`);
   return id;
 }
 
@@ -76,16 +90,18 @@ export function createSession(cookies: string): string {
  * 24 hours, so re-using one is both faster and the difference between working
  * and being locked out.
  */
-export function findValidSession(): { id: string; cookies: string } | null {
+export function findValidSession(chain: ChainId = "willys"): Session | null {
   const row = conn()
     .prepare(
-      "SELECT id, cookies FROM sessions WHERE expires_at > ? ORDER BY created_at DESC LIMIT 1",
+      "SELECT id, chain, cookies FROM sessions WHERE chain = ? AND expires_at > ? " +
+        "ORDER BY created_at DESC LIMIT 1",
     )
-    .get(Date.now()) as { id: string; cookies: string } | undefined;
+    .get(chain, Date.now()) as Session | undefined;
   return row ?? null;
 }
 
-export function getCookies(sessionId: string): string | null {
+/** The live session for an id, or null when unknown or expired. */
+export function getSession(sessionId: string): Session | null {
   const row = conn()
     .prepare("SELECT * FROM sessions WHERE id = ?")
     .get(sessionId) as Row | undefined;
@@ -96,7 +112,12 @@ export function getCookies(sessionId: string): string | null {
     log.info(`session utgången: ${sessionId}`);
     return null;
   }
-  return row.cookies;
+  return { id: row.id, chain: row.chain, cookies: row.cookies };
+}
+
+/** Cookies only — for callers that already know which chain the session is for. */
+export function getCookies(sessionId: string): string | null {
+  return getSession(sessionId)?.cookies ?? null;
 }
 
 export function deleteSession(sessionId: string): void {

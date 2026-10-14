@@ -6,20 +6,20 @@ steg för steg, och gör allt du kan åt dem. Lämna inte över en checklista.
 
 ## Stegen
 
-1. Kör `willys_setup` för att se exakt vad som saknas.
+1. Kör `setup` för att se exakt vad som saknas.
 
 2. Fråga vilken ort de bor i eller handlar i. Slå upp butiker med
-   `willys_find_stores`, visa träffarna som en kort lista, låt dem välja. De
+   `find_stores` (med `chain: "willys"`), visa träffarna som en kort lista, låt dem välja. De
    behöver aldrig leta upp ett butiks-id själva.
 
-3. Kör `willys_setup_init` med det valda butiks-id:t. Den skapar `.env`, skriver
+3. Kör `setup_init` med det valda butiks-id:t. Den skapar `.env`, skriver
    in butiken och sätter rättigheterna till 600. Svaret innehåller sökvägen till
    filen.
 
 4. Fråga om de någonsin loggat in på willys.se med lösenord, eller bara med
    BankID. Hoppa inte över det — se avsnittet nedan.
 
-5. Öppna filen åt dem med `willys_open_file` och sökvägen från steg 3. En
+5. Öppna filen åt dem med `open_file` och sökvägen från steg 3. En
    chattklient gör inte filsökvägar klickbara, och `.env` är dold i Finder, så
    att bara skriva ut sökvägen lämnar dem strandsatta. Servern kör på deras
    dator och kan öppna filen — gör det.
@@ -32,7 +32,7 @@ steg för steg, och gör allt du kan åt dem. Lämna inte över en checklista.
 
    Spara filen. Ingen omstart behövs — servern läser om `.env` när den ändras.
 
-6. När de säger att de är klara: kör `willys_setup` igen och bekräfta. Är
+6. När de säger att de är klara: kör `setup` igen och bekräfta. Är
    användarnamnet fel format säger kontrollen exakt vad som är fel — förklara
    det vänligt och låt dem rätta.
 

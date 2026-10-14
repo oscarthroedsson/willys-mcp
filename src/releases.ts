@@ -11,7 +11,7 @@ import { err, ok, type Result } from "./core/result.js";
  * breaking release that memory is wrong, and the model will confidently call a
  * tool that no longer exists. The fix is to make "what changed since the version
  * I knew" a cheap, explicit question: the version rides in the initialize
- * response, and willys_release_notes answers with only the entries newer than
+ * response, and release_notes answers with only the entries newer than
  * the version the model names.
  *
  * docs/CHANGELOG.md is the single source. It follows Keep a Changelog so humans
@@ -34,8 +34,11 @@ export const PACKAGE_VERSION: string = (() => {
 })();
 
 export interface Release {
+  /** "unreleased" for the [Unreleased] section. */
   version: string;
   date: string | null;
+  /** False for [Unreleased]: in the code you run from a checkout, not yet in a release. */
+  released: boolean;
   /** True when the entry has a "### Brytande" section — the model must read it. */
   breaking: boolean;
   body: string;
@@ -43,8 +46,13 @@ export interface Release {
 
 const HEADING = /^## \[([^\]]+)\](?: - (\d{4}-\d{2}-\d{2}))?\s*$/;
 
-/** Parse the changelog into released entries, newest first. Unreleased is skipped. */
-export function parseChangelog(src: string): Release[] {
+/**
+ * Parse the changelog, newest first. [Unreleased] is included only when it has
+ * content and `includeUnreleased` is set: a published package should have an
+ * empty one, but a server run from a checkout carries changes no release
+ * describes yet — and a model talking to it needs to know about them.
+ */
+export function parseChangelog(src: string, includeUnreleased = false): Release[] {
   const out: Release[] = [];
   let current: Release | null = null;
   const lines: string[] = [];
@@ -62,16 +70,19 @@ export function parseChangelog(src: string): Release[] {
       flush();
       lines.length = 0;
       const version = m[1] ?? "";
+      const unreleased = version.toLowerCase() === "unreleased";
       current =
-        version.toLowerCase() === "unreleased"
+        unreleased && !includeUnreleased
           ? null
-          : { version, date: m[2] ?? null, breaking: false, body: "" };
+          : unreleased
+            ? { version: "unreleased", date: null, released: false, breaking: false, body: "" }
+            : { version, date: m[2] ?? null, released: true, breaking: false, body: "" };
       continue;
     }
     if (current) lines.push(line);
   }
   flush();
-  return out;
+  return out.filter((r) => r.released || r.body.length > 0);
 }
 
 /** Numeric semver compare on major.minor.patch; pre-release tags are ignored. */
@@ -96,9 +107,9 @@ export function releasesSince(since?: string): Result<Release[]> {
   } catch {
     return err("NOT_FOUND", "docs/CHANGELOG.md saknas i paketet.");
   }
-  const all = parseChangelog(src);
+  const all = parseChangelog(src, true);
   if (!since) return ok(all.slice(0, 3));
-  return ok(all.filter((r) => compareVersions(r.version, since) > 0));
+  return ok(all.filter((r) => !r.released || compareVersions(r.version, since) > 0));
 }
 
 /**
@@ -107,11 +118,9 @@ export function releasesSince(since?: string): Result<Release[]> {
  * is spent on every connection.
  */
 export function versionInstructions(): string {
-  const latestBreaking = (() => {
-    const r = releasesSince();
-    if (!r.ok) return null;
-    return r.data.find((x) => x.breaking) ?? null;
-  })();
+  const recent = releasesSince();
+  const latestBreaking = recent.ok ? (recent.data.find((x) => x.released && x.breaking) ?? null) : null;
+  const unreleasedBreaking = recent.ok && recent.data.some((x) => !x.released && x.breaking);
 
   return `
 
@@ -119,11 +128,16 @@ export function versionInstructions(): string {
 
 Du kör version ${PACKAGE_VERSION} av servern. Känner du till verktygsnamn eller
 parametrar från en tidigare session eller version: anropa
-willys_release_notes med since = den versionen du kände till, innan du
+release_notes med since = den versionen du kände till, innan du
 anropar något. Saknas ett verktyg du minns, eller svarar ett anrop att verktyget
 är borttaget, står ersättningen där.${
     latestBreaking
       ? `\nSenaste brytande version: ${latestBreaking.version}. Läs dess migrering.`
+      : ""
+  }${
+    unreleasedBreaking
+      ? "\nDen här servern kör kod med osläppta brytande ändringar. Kör release_notes " +
+        "(utan since) och läs avsnittet unreleased innan du anropar något."
       : ""
   }`;
 }

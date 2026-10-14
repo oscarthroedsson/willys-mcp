@@ -16,8 +16,19 @@ import {
   type BuiltPlan,
   type PlanAction,
 } from "../planner/reconcile.js";
-import { defineTool, failure, respond, text } from "./kit.js";
-import { ingredient, planId, sessionId, surplusKeys } from "./schema-parts.js";
+import { axfoodSite } from "../constants/index.js";
+import { getAdapter } from "../chains/registry.js";
+import { CHAIN_IDS, type ChainId } from "../chains/types.js";
+import { defineTool, failure, refuse, respond, text } from "./kit.js";
+import {
+  chain,
+  ingredient,
+  optionalSessionId,
+  planId,
+  sessionId,
+  storeId,
+  surplusKeys,
+} from "./schema-parts.js";
 
 export const plannerTools = [
   defineTool({
@@ -25,11 +36,11 @@ export const plannerTools = [
     description:
       "Lägg ett recepts ingredienser i behovsregistret. Mängder slås ihop per vara " +
       "över alla recept i planen, så tre recept som vill ha ägg blir ETT behov. " +
-      "Rör inte kundvagnen — kör willys_plan_apply för det.",
-    needsAuth: false,
+      "Rör inte kundvagnen — kör plan_apply för det. Kedjeoberoende: samma plan kan " +
+      "prissättas i vilken kedja som helst med plan_status.",
+    auth: "none",
     schema: z
       .object({
-        sessionId,
         plan: planId,
         recipe: z
           .string()
@@ -53,7 +64,7 @@ export const plannerTools = [
           ...(r.rejected.length > 0 ? { avvisade: r.rejected } : {}),
           recept_i_planen: listRecipes(a.plan),
           nasta_steg:
-            "Kör willys_plan_status för att se föreslagen korg och totalkostnad.",
+            "Kör plan_status för att se föreslagen korg och totalkostnad.",
         }),
       );
     },
@@ -64,7 +75,7 @@ export const plannerTools = [
     description:
       "Ta bort ett recept ur planen. Behoven räknas om; varor som bara det receptet " +
       "krävde försvinner ur den föreslagna korgen.",
-    needsAuth: false,
+    auth: "none",
     schema: z
       .object({
         plan: planId,
@@ -95,11 +106,10 @@ export const plannerTools = [
     description:
       "Lägg till eller rätta EN ingrediens i ett recept utan att röra de andra. " +
       "Använd detta för att fixa en felmatchad rad (t.ex. skärpa mustContain) i " +
-      "stället för att skicka om hela receptet med willys_plan_add_recipe.",
-    needsAuth: false,
+      "stället för att skicka om hela receptet med plan_add_recipe.",
+    auth: "none",
     schema: z
       .object({
-        sessionId,
         plan: planId,
         recipe: z
           .string()
@@ -114,7 +124,7 @@ export const plannerTools = [
         return failure(
           `Inget recept "${a.recipe}" i planen ${a.plan}. ` +
             `Finns: ${listRecipes(a.plan).join(", ") || "(inga)"}. ` +
-            `Skapa det med willys_plan_add_recipe först.`,
+            `Skapa det med plan_add_recipe först.`,
         );
       }
       const r = setIngredient(a.plan, a.recipe, a.ingredient);
@@ -124,7 +134,7 @@ export const plannerTools = [
           plan: a.plan,
           recept: a.recipe,
           uppdaterad_ingrediens: r.key,
-          nasta_steg: "Kör willys_plan_status för att se effekten på korgen.",
+          nasta_steg: "Kör plan_status för att se effekten på korgen.",
         }),
       );
     },
@@ -135,7 +145,7 @@ export const plannerTools = [
     description:
       "Ta bort EN ingrediens ur ett recept (t.ex. en skafferivara användaren " +
       "redan har hemma), utan att röra receptets övriga rader.",
-    needsAuth: false,
+    auth: "none",
     schema: z
       .object({
         plan: planId,
@@ -159,7 +169,7 @@ export const plannerTools = [
           plan: a.plan,
           recept: a.recipe,
           borttagen_ingrediens: a.query,
-          nasta_steg: "Kör willys_plan_status för att se effekten.",
+          nasta_steg: "Kör plan_status för att se effekten.",
         }),
       );
     },
@@ -170,12 +180,35 @@ export const plannerTools = [
     description:
       "Visa vad planen kräver, vilken produkt och mängd som föreslås för varje vara, " +
       "vad det kostar, och vilka val som väntar på svar om överskott. Läser bara — " +
-      "ändrar varken plan eller kundvagn. Kör detta innan willys_plan_apply.",
-    needsAuth: true,
+      "ändrar varken plan eller kundvagn. Kör detta innan plan_apply. Planen prissätts i " +
+      "chain; compareWith visar vad samma plan kostar i andra kedjor.",
+    auth: "optional",
+    capability: "cheapest",
+    validateStore: true,
     schema: z
       .object({
-        sessionId,
+        chain,
+        storeId,
+        sessionId: optionalSessionId,
         plan: planId,
+        compareWith: z
+          .array(z.enum(CHAIN_IDS))
+          .max(4)
+          .default([])
+          .describe(
+            "Andra kedjor att räkna totalkostnad för, utan att ändra något. Kostar en sökning " +
+              "per ingrediens och kedja. Coop kräver butik i compareStores.",
+          ),
+        compareStores: z
+          .object(
+            Object.fromEntries(CHAIN_IDS.map((c) => [c, z.string().regex(/^\d{3,6}$/).optional()])) as Record<
+              ChainId,
+              z.ZodOptional<z.ZodString>
+            >,
+          )
+          .strict()
+          .default({})
+          .describe('Butik per kedja för compareWith, t.ex. { "coop": "252500" }.'),
         acceptSurplus: surplusKeys(
           "Ingrediensnycklar där du redan fått ja till det billigare valet med " +
             "överskott. De slutar fråga.",
@@ -187,11 +220,42 @@ export const plannerTools = [
       })
       .strict(),
     async handle(a, ctx) {
-      const r = await buildPlan(ctx.cookies, a.plan, {
+      // Without this every line fails one by one and the answer reads "0 kr,
+      // 3 unresolved" — a store problem disguised as an empty shelf.
+      if (ctx.adapter!.storeScope === "required" && !ctx.storeId) {
+        return refuse(
+          "INPUT",
+          `${ctx.adapter!.displayName} kräver storeId. Fråga användaren efter postnummer och ` +
+            `slå upp butiken med find_stores({ chain: "${ctx.chain}", query: postnummer }).`,
+        );
+      }
+      const r = await buildPlan(ctx.adapter!, ctx, a.plan, {
         acceptSurplus: a.acceptSurplus,
         preferTight: a.preferTight,
       });
-      return respond(r, renderPlan);
+      if (!r.ok || a.compareWith.length === 0) return respond(r, (d) => renderPlan(d));
+
+      const others = [...new Set(a.compareWith)].filter((c) => c !== ctx.chain);
+      const totals = await Promise.all(
+        others.map(async (id) => {
+          const adapter = getAdapter(id);
+          if (adapter.storeScope === "required" && !a.compareStores[id]) {
+            return { kedja: id, fel: `kräver butik i compareStores.${id}` };
+          }
+          const b = await buildPlan(adapter, { cookies: "", storeId: a.compareStores[id] }, a.plan, {
+            acceptSurplus: ["*"],
+          });
+          return b.ok
+            ? { kedja: id, summa: b.data.totalCost, olosta_rader: b.data.unresolved }
+            : { kedja: id, fel: `${b.kind}: ${b.message}` };
+        }),
+      );
+      return respond(r, (d) =>
+        renderPlan(d, [
+          { kedja: d.chain, summa: d.totalCost, olosta_rader: d.unresolved },
+          ...totals,
+        ]),
+      );
     },
   }),
 
@@ -200,10 +264,12 @@ export const plannerTools = [
     description:
       "Synka kundvagnen mot planen. Skickar BARA differensen: rätt vara i rätt antal " +
       "ger inget anrop, växande behov byter förpackning eller höjer antalet. " +
-      "dryRun=true (default) visar ändringarna utan att röra vagnen.",
-    needsAuth: true,
+      "dryRun=true (default) visar ändringarna utan att röra vagnen. Kräver session för chain.",
+    auth: "required",
+    capability: "cart",
     schema: z
       .object({
+        chain,
         sessionId,
         plan: planId,
         dryRun: z
@@ -230,13 +296,15 @@ export const plannerTools = [
       })
       .strict(),
     async handle(a, ctx) {
-      const built = await buildPlan(ctx.cookies, a.plan, {
+      const built = await buildPlan(ctx.adapter!, ctx, a.plan, {
         acceptSurplus: a.acceptSurplus,
         preferTight: a.preferTight,
       });
-      if (!built.ok) return respond(built, renderPlan);
+      if (!built.ok) return respond(built, (d: BuiltPlan) => renderPlan(d));
 
-      const applied = await applyPlan(ctx.cookies, built.data, a.dryRun, a.acceptMatch);
+      // The cart capability (checked by the dispatcher) guarantees an Axfood site.
+      const site = axfoodSite(ctx.chain)!;
+      const applied = await applyPlan(site, ctx.cookies, built.data, a.dryRun, a.acceptMatch);
       return respond(applied, (d) =>
         compact({
           plan: a.plan,
@@ -275,7 +343,7 @@ export const plannerTools = [
     name: TOOL.planClear,
     description:
       "Nollställ planen. Tömmer INTE kundvagnen — den behåller det som redan lagts i.",
-    needsAuth: false,
+    auth: "none",
     schema: z
       .object({
         plan: planId,
@@ -309,10 +377,19 @@ export const plannerTools = [
  * Pending surplus questions are hoisted to their own field: they are the one
  * thing that must not scroll past unanswered.
  */
-function renderPlan(d: BuiltPlan): string {
+function renderPlan(d: BuiltPlan, comparison?: Array<Record<string, unknown>>): string {
   return compact({
     plan: d.planId,
+    kedja: d.chain,
     summa: d.totalCost,
+    ...(comparison
+      ? {
+          jamforelse: comparison,
+          jamforelse_notering:
+            "Övriga kedjors summa räknas med billigaste val per rad och utan överskottsfrågor; " +
+            "rader som inte hittades ingår inte.",
+        }
+      : {}),
     ...(d.pendingDecisions > 0 ? { obesvarade_beslut: d.pendingDecisions } : {}),
     ...(d.unresolved > 0 ? { olosta_rader: d.unresolved } : {}),
 

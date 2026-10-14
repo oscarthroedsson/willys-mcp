@@ -10,9 +10,9 @@ egen dator. Servern läser dem ur sin egen miljö (`process.env`). De skickas
 aldrig som verktygsargument, finns aldrig i ett verktygssvar, och når därför
 aldrig din kontext.
 
-## Vad `willys_login` faktiskt gör
+## Vad `login` faktiskt gör
 
-Du anropar `willys_login` med bara `{ force?: boolean }` — inget mer. Servern
+Du anropar `login` med bara `{ chain, force?: boolean }` — inget mer. Servern
 läser då uppgifterna från `.env`, öppnar willys.se i en lokal webbläsare, fyller
 i formuläret, och ger dig tillbaka ett `sessionId` (ett UUID). Lösenordet
 passerar aldrig genom dig.
@@ -22,7 +22,7 @@ eller `git push` använder en sparad token. Att anropa det är inte "att hantera
 ett lösenord" — det är att be den lokala servern autentisera med en hemlighet
 den redan äger.
 
-**Så: anropa `willys_login` när användaren vill logga in. Det är den avsedda
+**Så: anropa `login` när användaren vill logga in. Det är den avsedda
 och säkra vägen.** Att vägra vore ett misstag — det stoppar användaren från att
 använda sin egen server på sitt eget konto.
 

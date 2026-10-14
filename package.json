@@ -42,6 +42,7 @@
     "test:category": "tsx tests/category.test.ts",
     "test:coop": "tsx tests/coop.test.ts",
     "test:chains": "tsx tests/chains.test.ts",
+    "test:releases": "tsx tests/releases.test.ts",
     "kandidater": "tsx scripts/kandidater.ts",
     "veckohandla": "tsx scripts/veckohandla.ts"
   },

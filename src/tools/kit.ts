@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { explain, type Result } from "../core/result.js";
 import type { ToolName } from "../constants/index.js";
+import type { Capability, ChainAdapter, ChainId } from "../chains/types.js";
 
 /**
  * The tool contract.
@@ -35,24 +36,48 @@ export function respond<T>(
   return failure(`${explain(r.kind)} (${r.kind}) — ${r.message}`);
 }
 
+/** A failure in the same shape respond() uses, for checks made before any call. */
+export function refuse(kind: Parameters<typeof explain>[0], message: string): ToolResponse {
+  return failure(`${explain(kind)} (${kind}) — ${message}`);
+}
+
 /**
  * What a handler is given besides its parsed arguments.
  *
- * `cookies` is the resolved session for tools that declare needsAuth — the
- * dispatcher resolves it once from the sessionId argument, so no handler
- * re-implements the "session expired" branch. It is an empty string for tools
- * that need no session.
+ * The dispatcher resolves all of this once, so no handler re-implements it:
+ * - `cookies`: the session for `sessionId`, "" when the call is anonymous.
+ * - `chain` / `adapter`: from the `chain` argument, already checked to have the
+ *   capability the tool declares. Null for tools without a chain.
+ * - `storeId`: the store argument, or the user's default for that chain, already
+ *   checked against the chain's registry when the tool asks for it.
  */
 export interface Ctx {
   cookies: string;
+  chain: ChainId | null;
+  adapter: ChainAdapter | null;
+  storeId?: string | undefined;
 }
+
+/**
+ * - "required": a valid `sessionId` must be passed (cart, orders).
+ * - "optional": anonymous works; a `sessionId` makes it the user's own view
+ *   (their store's prices).
+ * - "none": no session involved.
+ */
+export type AuthMode = "required" | "optional" | "none";
 
 export interface Tool<S extends z.ZodTypeAny = z.ZodTypeAny> {
   name: ToolName;
   description: string;
   schema: S;
-  /** True when the tool talks to Willys and needs resolved session cookies. */
-  needsAuth: boolean;
+  auth: AuthMode;
+  /** What the chain must support. Checked before the handler runs. */
+  capability?: Capability;
+  /**
+   * Check `storeId` against the chain's store registry before running, so a
+   * Willys id sent to Hemköp is "no such store" instead of zero hits.
+   */
+  validateStore?: boolean;
   handle: (args: z.infer<S>, ctx: Ctx) => ToolResponse | Promise<ToolResponse>;
 }
 

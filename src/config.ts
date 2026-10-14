@@ -52,7 +52,7 @@ function resolveStateDir(): string {
   return dir;
 }
 
-/** The .env the user fills in. Created by willys_setup_init. */
+/** The .env the user fills in. Created by setup_init. */
 export const ENV_FILE = (): string =>
   process.env.WILLYS_ENV_FILE ?? path.join(STATE_DIR, ".env");
 
@@ -62,7 +62,7 @@ export const ENV_TEMPLATE = path.join(PACKAGE_ROOT, ".env.example");
 export const DB_PATH =
   process.env.WILLYS_DB_PATH ?? path.join(STATE_DIR, "willys.db");
 
-/** Set in .env; look one up with willys_find_stores. */
+/** Set in .env; look one up with find_stores (chain "willys"). */
 export const DEFAULT_STORE_ID = () => process.env.WILLYS_STORE_ID ?? null;
 
 /** Set WILLYS_HEADFUL=1 to watch the login flow in a real browser window. */
