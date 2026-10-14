@@ -41,6 +41,7 @@
     "test:planner": "tsx tests/planner.test.ts",
     "test:category": "tsx tests/category.test.ts",
     "test:coop": "tsx tests/coop.test.ts",
+    "test:chains": "tsx tests/chains.test.ts",
     "kandidater": "tsx scripts/kandidater.ts",
     "veckohandla": "tsx scripts/veckohandla.ts"
   },

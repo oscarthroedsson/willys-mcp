@@ -1,4 +1,8 @@
-import { ORIGIN } from "../../constants/index.js";
+import {
+  GS1_SWEDISH_MEAT,
+  GS1_TO_FLAG,
+  ORIGIN,
+} from "../../constants/index.js";
 import type { Product } from "../../domain/product.js";
 
 /**
@@ -57,18 +61,6 @@ export interface CoopItem {
   nutrientInformation?: unknown[] | null;
   nutrientBasis?: unknown;
 }
-
-const TAG_TO_FLAG: Record<string, string> = {
-  FRAN_SVERIGE: "fran_sverige",
-  KOTT_FRAN_SVERIGE: "svenskt_kott",
-  SVENSK_FAGEL: "svensk_fagel",
-  NYCKELHALET: "nyckelhalet",
-  EU_ORGANIC_FARMING: "eu_ekologisk",
-  KRAV_MARK: "krav",
-  MSC: "msc",
-};
-
-const SWEDISH_MEAT_TAGS = ["KOTT_FRAN_SVERIGE", "SVENSK_FAGEL", "SVENSKT_SIGILL_NATURBETESKOTT"];
 
 const COMPARE_UNIT: Record<string, string> = { kg: "kg", liter: "l", styck: "st" };
 
@@ -150,8 +142,8 @@ export function toCoopProduct(item: CoopItem): Product | null {
     perUnit: comparePrice,
     origin:
       item.fromSweden === true || tags.includes("FRAN_SVERIGE") ? ORIGIN.swedish : ORIGIN.unknown,
-    swedishMeat: tags.some((t) => SWEDISH_MEAT_TAGS.includes(t)),
-    flags: tags.map((t) => TAG_TO_FLAG[t]).filter((x): x is string => Boolean(x)),
+    swedishMeat: tags.some((t) => GS1_SWEDISH_MEAT.includes(t)),
+    flags: tags.map((t) => GS1_TO_FLAG[t]).filter((x): x is string => Boolean(x)),
     onSale: multiBuy,
     saving:
       promoPrice !== null && listPrice !== null && listPrice > promoPrice

@@ -227,7 +227,9 @@ Bas: `https://www.citygross.se/api/v1`. Ingen nyckel.
 | Rutt | Anteckning |
 | --- | --- |
 | `Loop54/search?SearchQuery=&skip=&take=&store=&SortField=&SortOrder=` | Sök; svaret har `searchResults.products`, `facets`, `totalCount` |
-| `Loop54/search/quick/?SearchQuery=` | Autocomplete |
+| `Loop54/search/quick/?SearchQuery=` | Autocomplete; svaret har `autoCompletions: { count, items: [{ query }] }` |
+| `Loop54/products/{id}?store=` | Produktdetalj; ingredienser i `foodAndBeverageExtension.ingredientStatement` |
+| `Loop54/category/2930/products?currentWeekDiscountOnly=true&discountonly=true&skip=&take=&store=` | Veckans erbjudanden (2930 = matvaror), 225 i butik 3204 |
 | `Loop54/products/{id}/related`, `…/recommended`, `Loop54/products/topsellers` | Rekommendationer |
 | `sites?siteTypeId=3` | Butiker; `storeNumber` (t.ex. `3204`) är värdet för `store=` |
 
@@ -239,12 +241,24 @@ Pris ligger i `productStoreDetails.prices.currentPrice` (`price`,
 `comparativePrice`, `comparativePriceUnit`: `KGM`). Kampanj ligger i
 `activePromotion.priceDetails`.
 
-**Fallgrop:** jämförprissorteringen räknar med ordinarie pris. Blandfärs med
-kampanj 99,95 kr/kg sorteras som 123 kr/kg.
+**Fallgrop 1:** jämförprissorteringen räknar med ordinarie pris. Blandfärs med
+kampanj 99,95 kr/kg sorteras som 123 kr/kg. Under kampanjen visar
+`currentPrice` fortfarande ordinarie pris; kampanjen står i
+`activePromotion.priceDetails`.
 
-Produktkoderna har Axfood-format (`101408266_KG`). Det är värt att undersöka om
-de matchar Willys koder, eftersom det skulle ge exakt varumatchning mellan
-kedjorna.
+**Fallgrop 2:** `skip`, `take` och `totalCount` gäller en enda blandad lista av
+produkter, recept, sidor och butiker. "köttfärs" ger `totalCount: 101` men bara
+9 produkter; resten är recept. `take=50` gav 9 produkter och 40 recept. Adaptern
+bläddrar därför igenom listan (100 åt gången, högst 300) och räknar bara
+produkterna.
+
+**Fallgrop 3:** `netContent.value` är opålitligt ("5DL" står som 5000). Använd
+`descriptiveSize` ("CA200G", "1,5L").
+
+**Produktkoderna är Axfoods** (verifierat 2026-10-14): av 24 City Gross-koder
+gav 20 samma GTIN som `/axfood/rest/p/{code}` hos Willys, 0 avvek och 4 fanns
+inte i Willys sortiment. Samma kod betyder alltså samma vara hos Willys, Hemköp
+och City Gross. Det ger exakt varumatchning i jämförelser.
 
 ---
 
@@ -263,9 +277,25 @@ hittades i sök, så servern sorterar själv. Filtrering sker via
 `filters=dietary_preferences:halal_suitable`; giltiga värden kommer tillbaka i
 `filters[]`.
 
+- `gross_price` är vad en förpackning kostar nu. Vid ett flerköp ("2 för 30 kr")
+  står det kvar på ordinarie pris, vilket är rätt eftersom det kräver två.
+- Förpackningsstorleken är sista delen av `name_extra` ("Polen, 340 g"); delen
+  före är ursprungslandet. Dela på ", " och inte på "," eftersom "1,5 l" har
+  decimalkomma.
+- Märkningar kommer som namn i `client_classifiers` ("Svensk Fågel", "Kött från
+  Sverige", "Keyhole").
+- Sökträffarna saknar kategori, så Mathem har ingen kategorifacett.
+- Ingredienser står i produktdetaljens `detailed_info.local[0].contents_table`
+  under raden "Ingredienser".
+
+**Region:** en anonym besökare får aldrig frågan om postnummer; region väljs
+först med konto eller leveransadress. Det publika API:t har alltså en enda
+prislista. Om priserna skiljer sig per region går inte att avgöra utan konto
+(epic 6).
+
 ---
 
 ## Öppet
 
 1. Allt inloggat: kundvagn, ordrar, profil per kedja.
-2. Om Mathems priser skiljer sig per region.
+2. Om Mathems priser skiljer sig per region (kräver konto, epic 6).

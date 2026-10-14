@@ -128,3 +128,33 @@ export const CATEGORY = {
 } as const;
 
 export type CategorySlug = (typeof CATEGORY)[keyof typeof CATEGORY];
+
+/**
+ * GS1 marking codes (T4028) → our flag names. Coop and City Gross both send
+ * these codes; Axfood uses its own label strings (LABEL_TO_FLAG above).
+ */
+export const GS1_TO_FLAG: Record<string, string> = {
+  FRAN_SVERIGE: "fran_sverige",
+  KOTT_FRAN_SVERIGE: "svenskt_kott",
+  SVENSK_FAGEL: "svensk_fagel",
+  NYCKELHALET: "nyckelhalet",
+  EU_ORGANIC_FARMING: "eu_ekologisk",
+  KRAV_MARK: "krav",
+  MSC: "msc",
+};
+
+/** GS1 codes that prove Swedish origin. City Gross also writes "Mjölk från Sverige" in plain text. */
+export const GS1_SWEDISH_ORIGIN: readonly string[] = [
+  "FRAN_SVERIGE",
+  "KOTT_FRAN_SVERIGE",
+  "SVENSK_FAGEL",
+  "SVENSKT_SIGILL_NATURBETESKOTT",
+  "Mjölk från Sverige",
+];
+
+/** GS1 codes that prove Swedish meat or poultry — the stricter requireSwedishMeat. */
+export const GS1_SWEDISH_MEAT: readonly string[] = [
+  "KOTT_FRAN_SVERIGE",
+  "SVENSK_FAGEL",
+  "SVENSKT_SIGILL_NATURBETESKOTT",
+];

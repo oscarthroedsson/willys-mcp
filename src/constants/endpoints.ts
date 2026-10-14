@@ -121,3 +121,22 @@ export const COOP = {
   /** The query string every personalization call carries besides `store`. */
   searchParams: "api-version=v2&groups=CUSTOMER_PRIVATE&device=desktop&direct=false",
 } as const;
+
+/**
+ * City Gross: Loop54 behind their own API, no key. `store` is the store's
+ * `storeNumber` (e.g. 3204) from `sites`, not its site id. Mapped 2026-10-13/14.
+ */
+export const CITYGROSS = {
+  api: "https://www.citygross.se/api/v1",
+  /** Root grocery category; offers are its products filtered to this week's discounts. */
+  groceryCategory: "2930",
+} as const;
+
+/**
+ * Mathem: one national assortment, no key, no sorting in search. 30 products
+ * per page; `attributes.has_more_items` says whether to fetch the next.
+ */
+export const MATHEM = {
+  api: "https://www.mathem.se/api/v1",
+  pageSize: 30,
+} as const;
